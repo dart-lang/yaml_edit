@@ -1,3 +1,6 @@
+## v2.0.2
+- Updated `repository` and other meta-data in `pubspec.yaml`.
+
 ## v2.0.1
 - License changed to BSD, as this package is now maintained by the Dart team.
 - Fixed minor lints.
