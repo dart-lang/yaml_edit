@@ -1,4 +1,6 @@
 ## v2.0.2
+- Fix trailing whitespace after adding new key with block-value to map
+  ([#15](https://github.com/dart-lang/yaml_edit/issues/15)).
 - Updated `repository` and other meta-data in `pubspec.yaml`.
 
 ## v2.0.1
