@@ -20,6 +20,8 @@ void main() {
 }
 ```
 
+### Example: Converting JSON to YAML (block formatted)
+
 ## Testing
 
 Testing is done in two strategies: Unit testing (`/test/editor_test.dart`) and
