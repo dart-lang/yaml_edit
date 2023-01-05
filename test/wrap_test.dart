@@ -6,7 +6,6 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
-import 'package:yaml_edit/src/editor.dart';
 import 'package:yaml_edit/src/equality.dart';
 import 'package:yaml_edit/src/wrap.dart';
 
