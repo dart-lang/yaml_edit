@@ -149,6 +149,42 @@ a:
   2: null
 '''));
     });
+
+    test('block append', (){
+      final yamlEditor = YamlEditor('''
+# comment
+a:
+  - z:
+      x: 1
+      y: 2
+  - z:
+      x: 3
+      y: 4
+b:
+  - w:
+      m: 2
+      n: 4
+''');
+      yamlEditor.appendToList(['a'], {'z' : {'x': 5, 'y': 6}});
+
+      expect(yamlEditor.toString(), equals('''
+# comment
+a:
+  - z:
+      x: 1
+      y: 2
+  - z:
+      x: 3
+      y: 4
+  - z:
+      x: 5
+      y: 6
+b:
+  - w:
+      m: 2
+      n: 4
+'''));
+    });
   });
 
   group('flow list', () {

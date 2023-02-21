@@ -98,6 +98,43 @@ void main() {
 '''));
       expectYamlBuilderValue(doc, [0, 1, 2]);
     });
+
+    test('block insert', (){
+      final yamlEditor = YamlEditor('''
+# comment
+a:
+  - z:
+      x: 1
+      y: 2
+  - z:
+      x: 3
+      y: 4
+b:
+  - w:
+      m: 2
+      n: 4
+''');
+      yamlEditor.insertIntoList(['a'], 2, {'z' : {'x': 5, 'y': 6}});
+
+      expect(yamlEditor.toString(), equals('''
+# comment
+a:
+  - z:
+      x: 1
+      y: 2
+  - z:
+      x: 3
+      y: 4
+  - z:
+      x: 5
+      y: 6
+b:
+  - w:
+      m: 2
+      n: 4
+'''));
+    });
+
   });
 
   group('flow list', () {
