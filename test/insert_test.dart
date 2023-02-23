@@ -99,9 +99,31 @@ void main() {
       expectYamlBuilderValue(doc, [0, 1, 2]);
     });
 
-    test('block insert', (){
-      final yamlEditor = YamlEditor('''
+    for (var i = 0; i < 3; i++) {
+      test('block insert(1) at $i', () {
+        final yamlEditor = YamlEditor('''
 # comment
+- z:
+    x: 1
+    y: 2
+- z:
+    x: 3
+    y: 4
+''');
+        expect(
+            () => yamlEditor.insertIntoList(
+                [],
+                i,
+                {
+                  'z': {'x': 5, 'y': 6}
+                }),
+            returnsNormally);
+      });
+    }
+
+    for (var i = 0; i < 3; i++) {
+      test('block insert(2) at $i', () {
+        final yamlEditor = YamlEditor('''
 a:
   - z:
       x: 1
@@ -114,27 +136,43 @@ b:
       m: 2
       n: 4
 ''');
-      yamlEditor.insertIntoList(['a'], 2, {'z' : {'x': 5, 'y': 6}});
+        expect(
+            () => yamlEditor.insertIntoList(
+                ['a'],
+                i,
+                {
+                  'z': {'x': 5, 'y': 6}
+                }),
+            returnsNormally);
+      });
+    }
 
-      expect(yamlEditor.toString(), equals('''
-# comment
+    for (var i = 0; i < 2; i++) {
+      test('block insert nested and with comments at $i', () {
+        final yamlEditor = YamlEditor('''
 a:
-  - z:
-      x: 1
-      y: 2
-  - z:
-      x: 3
-      y: 4
-  - z:
-      x: 5
-      y: 6
-b:
-  - w:
-      m: 2
-      n: 4
-'''));
-    });
-
+  b:
+    - c:
+        d: 1
+    - c:
+        d: 2
+# comment
+  e:
+    - g:
+        e: 1
+        f: 2 
+# comment
+''');
+        expect(
+            () => yamlEditor.insertIntoList(
+                ['a', 'b'],
+                i,
+                {
+                  'g': {'e': 3, 'f': 4}
+                }),
+            returnsNormally);
+      });
+    }
   });
 
   group('flow list', () {

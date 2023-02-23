@@ -150,7 +150,35 @@ a:
 '''));
     });
 
-    test('block append', (){
+    test('block append (1)', () {
+      final yamlEditor = YamlEditor('''
+# comment
+- z:
+    x: 1
+    y: 2
+- z:
+    x: 3
+    y: 4
+''');
+      yamlEditor.appendToList([], {
+        'z': {'x': 5, 'y': 6}
+      });
+
+      expect(yamlEditor.toString(), equals('''
+# comment
+- z:
+    x: 1
+    y: 2
+- z:
+    x: 3
+    y: 4
+- z:
+    x: 5
+    y: 6
+'''));
+    });
+
+    test('block append (2)', () {
       final yamlEditor = YamlEditor('''
 # comment
 a:
@@ -165,7 +193,11 @@ b:
       m: 2
       n: 4
 ''');
-      yamlEditor.appendToList(['a'], {'z' : {'x': 5, 'y': 6}});
+      yamlEditor.appendToList([
+        'a'
+      ], {
+        'z': {'x': 5, 'y': 6}
+      });
 
       expect(yamlEditor.toString(), equals('''
 # comment
@@ -184,6 +216,31 @@ b:
       m: 2
       n: 4
 '''));
+    });
+
+    test('block append nested and with comments', () {
+      final yamlEditor = YamlEditor('''
+a:
+  b:
+    - c:
+        d: 1
+    - c:
+        d: 2
+# comment
+  e:
+    - g:
+        e: 1
+        f: 2 
+# comment
+''');
+      expect(
+          () => yamlEditor.appendToList([
+                'a',
+                'e'
+              ], {
+                'g': {'e': 3, 'f': 4}
+              }),
+          returnsNormally);
     });
   });
 
