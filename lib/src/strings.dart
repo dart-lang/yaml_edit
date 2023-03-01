@@ -70,7 +70,8 @@ String _yamlEncodeDoubleQuoted(String string) {
 /// single-quotes.
 ///
 /// It is important that we ensure that [string] is free of unprintable
-/// characters by calling [assertValidScalar] before invoking this function.
+/// characters by calling [_hasUnprintableCharacters] before invoking this
+/// function.
 String _tryYamlEncodeSingleQuoted(String string) {
   // If [string] contains a newline we'll use double quoted strings instead.
   // Single quoted strings can represent newlines, but then we have to use an
@@ -78,6 +79,8 @@ String _tryYamlEncodeSingleQuoted(String string) {
   // line breaks are ignored, we can't represent "\n ".
   // Thus, if the string contains `\n` and we're asked to do single quoted,
   // we'll fallback to a double quoted string.
+  // TODO: Consider if we should make '\n' an unprintedable, this might make
+  //       folded strings into double quoted -- some work is needed here.
   if (string.contains('\n')) {
     return _yamlEncodeDoubleQuoted(string);
   }
@@ -88,7 +91,8 @@ String _tryYamlEncodeSingleQuoted(String string) {
 /// Generates a YAML-safe folded string.
 ///
 /// It is important that we ensure that [string] is free of unprintable
-/// characters by calling [assertValidScalar] before invoking this function.
+/// characters by calling [_hasUnprintableCharacters] before invoking this
+/// function.
 String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
   String result;
 
@@ -112,7 +116,8 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
 /// Generates a YAML-safe literal string.
 ///
 /// It is important that we ensure that [string] is free of unprintable
-/// characters by calling [assertValidScalar] before invoking this function.
+/// characters by calling [_hasUnprintableCharacters] before invoking this
+/// function.
 String _tryYamlEncodeLiteral(
     String string, int indentation, String lineEnding) {
   final result = '|-\n$string';
@@ -294,8 +299,7 @@ final Map<int, String> unprintableCharCodes = {
   8233: '\\P', //  Escaped Unicode paragraph separator (#x2029) character.
 };
 
-/// List of escape characters. In particular, \x22 is not included because it
-/// can be processed normally.
+/// List of escape characters.
 ///
 /// See 5.7 Escape Characters https://yaml.org/spec/1.2/spec.html#id2776092
 final Map<int, String> doubleQuoteEscapeChars = {
@@ -303,19 +307,6 @@ final Map<int, String> doubleQuoteEscapeChars = {
   9: '\\t', //  Escaped ASCII horizontal tab (#x9) character. Printable
   10: '\\n', //  Escaped ASCII line feed (#xA) character. Line Break.
   34: '\\"', //  Escaped ASCII double quote (#x22).
-  47: '\\/', //  Escaped ASCII slash (#x2F), for JSON compatibility.
-  92: '\\\\', //  Escaped ASCII back slash (#x5C).
-};
-
-/// List of escape characters. In particular, \x27 is not included because it
-/// can be processed normally.
-///
-/// See 5.7 Escape Characters https://yaml.org/spec/1.2/spec.html#id2776092
-final Map<int, String> singleQuoteEscapeChars = {
-  ...unprintableCharCodes,
-  9: '\\t', //  Escaped ASCII horizontal tab (#x9) character. Printable
-  10: '\\n', //  Escaped ASCII line feed (#xA) character. Line Break.
-  39: '\\\'', //  Escaped ASCII single quote (#x27).
   47: '\\/', //  Escaped ASCII slash (#x2F), for JSON compatibility.
   92: '\\\\', //  Escaped ASCII back slash (#x5C).
 };
