@@ -1,6 +1,7 @@
 [![Dart CI](https://github.com/dart-lang/yaml_edit/actions/workflows/test-package.yml/badge.svg)](https://github.com/dart-lang/yaml_edit/actions/workflows/test-package.yml)
 [![pub package](https://img.shields.io/pub/v/yaml_edit.svg)](https://pub.dev/packages/yaml_edit)
 [![package publisher](https://img.shields.io/pub/publisher/yaml_edit.svg)](https://pub.dev/packages/yaml_edit/publisher)
+[![Coverage Status](https://coveralls.io/repos/github/dart-lang/yaml_edit/badge.svg)](https://coveralls.io/github/dart-lang/yaml_edit)
 
 A library for [YAML](https://yaml.org) manipulation while preserving comments.
 
@@ -17,6 +18,32 @@ void main() {
   print(yamlEditor);
   // Expected output:
   // {YAML: YAML Ain't Markup Language}
+}
+```
+
+### Example: Converting JSON to YAML (block formatted)
+
+```dart
+void main() {
+  final jsonString = r'''
+{
+  "key": "value",
+  "list": [
+    "first",
+    "second",
+    "last entry in the list"
+  ],
+  "map": {
+    "multiline": "this is a fairly long string with\nline breaks..."
+  }
+}
+''';
+  final jsonValue = json.decode(jsonString);
+
+  // Convert jsonValue to YAML
+  final yamlEditor = YamlEditor('');
+  yamlEditor.update([], jsonValue);
+  print(yamlEditor.toString());
 }
 ```
 
