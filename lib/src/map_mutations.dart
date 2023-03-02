@@ -137,8 +137,7 @@ SourceEdit _replaceInBlockMap(
       !isFlowYamlCollectionNode(newValue) &&
       !isEmpty(newValue)) {
     valueAsString = lineEnding + valueAsString;
-  }
-  else{
+  } else {
     valueAsString = ' ' + valueAsString;
   }
 
