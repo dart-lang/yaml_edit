@@ -54,9 +54,6 @@ jobs:
       - uses: dart-lang/setup-dart@a57a6c04cf7d4840e88432aad6281d1e125f0d46
         with:
           sdk: ${{ matrix.sdk }}
-      - id: coverage
-        name: Install package:coverage
-        run: dart pub global activate coverage --no-executables
       - id: install
         name: Install dependencies
         run: dart pub get
@@ -64,8 +61,8 @@ jobs:
         run: dart test --platform ${{ matrix.platform }} --coverage=./coverage
         if: always() && steps.install.outcome == 'success'
       - name: Convert coverage to lcov
-        run: dart pub global run coverage:format_coverage -i ./coverage -o ./coverage/lcov.info --lcov --report-on lib/
-        if: always() && steps.coverage.outcome == 'success'
+        run: dart run coverage:format_coverage -i ./coverage -o ./coverage/lcov.info --lcov --report-on lib/
+        if: always() && steps.install.outcome == 'success'
       - uses: coverallsapp/github-action@v1
         with:
           flag-name: os:${{ matrix.os }}/dart:${{ matrix.sdk }}/platform:${{ matrix.platform }}
