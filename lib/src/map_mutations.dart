@@ -138,6 +138,9 @@ SourceEdit _replaceInBlockMap(
       !isEmpty(newValue)) {
     valueAsString = lineEnding + valueAsString;
   }
+  else{
+    valueAsString = ' ' + valueAsString;
+  }
 
   /// +1 accounts for the colon
   final start = keyNode.span.end.offset + 1;
@@ -148,7 +151,7 @@ SourceEdit _replaceInBlockMap(
   /// this.
   if (end < start) end = start;
 
-  return SourceEdit(start, end - start, ' ' + valueAsString);
+  return SourceEdit(start, end - start, valueAsString);
 }
 
 /// Performs the string operation on [yaml] to achieve the effect of replacing
