@@ -412,6 +412,48 @@ a:
           ]
         });
       });
+
+      group('works with newline whitespace in folded string', () {
+        test('with whitespace newline whitespace', () {
+          final doc = YamlEditor('hello');
+          final node = wrapAsYamlNode(
+            'hello \n world',
+            scalarStyle: ScalarStyle.FOLDED,
+          );
+          doc.update([], node);
+          expect(doc.toString(), equals('>-\n  hello \n   world'));
+        });
+
+        test('with whitespace newline newline whitespace', () {
+          final doc = YamlEditor('hello');
+          final node = wrapAsYamlNode(
+            'hello \n\n world',
+            scalarStyle: ScalarStyle.FOLDED,
+          );
+          doc.update([], node);
+          expect(doc.toString(), equals('>-\n  hello \n  \n   world'));
+        });
+
+        test('with whitespace newline whitespace newline whitespace', () {
+          final doc = YamlEditor('hello');
+          final node = wrapAsYamlNode(
+            'hello \n \n world',
+            scalarStyle: ScalarStyle.FOLDED,
+          );
+          doc.update([], node);
+          expect(doc.toString(), equals('>-\n  hello \n   \n   world'));
+        });
+
+        test('with whitespace newline string newline whitespace', () {
+          final doc = YamlEditor('hello');
+          final node = wrapAsYamlNode(
+            'hello \nstring\n world',
+            scalarStyle: ScalarStyle.FOLDED,
+          );
+          doc.update([], node);
+          expect(doc.toString(), equals('>-\n  hello \n\n  string\n   world'));
+        });
+      });
     });
   });
 

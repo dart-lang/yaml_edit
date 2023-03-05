@@ -105,12 +105,31 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
     result = '>-\n' + ' ' * indentation;
   }
 
+  /// If the line starts with a empty character (excluding indentation), the
+  /// newline character(\n) before and after the line will be remained.
+  var emptyBegin = false;
+  var replacedString =
+      trimmedString.replaceAllMapped(RegExp(r'\n(.*)'), (match) {
+    var nextLine = match.group(1)!;
+
+    if (nextLine.startsWith(' ') || nextLine.isEmpty) {
+      emptyBegin = true;
+      return lineEnding + ' ' * indentation + nextLine;
+    }
+
+    if (emptyBegin) {
+      emptyBegin = false;
+      return lineEnding + ' ' * indentation + nextLine;
+    } else {
+      emptyBegin = false;
+      return lineEnding * 2 + ' ' * indentation + nextLine;
+    }
+  });
+
   /// Duplicating the newline for folded strings preserves it in YAML.
   /// Assumes the user did not try to account for windows documents by using
   /// `\r\n` already
-  return result +
-      trimmedString.replaceAll('\n', lineEnding * 2 + ' ' * indentation) +
-      removedPortion;
+  return result + replacedString + removedPortion;
 }
 
 /// Generates a YAML-safe literal string.
