@@ -108,9 +108,9 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
   /// If the line starts with a empty character (excluding indentation), the
   /// newline character(\n) before and after the line will be remained.
   var emptyBegin = false;
-  var replacedString =
+  final replacedString =
       trimmedString.replaceAllMapped(RegExp(r'\n(.*)'), (match) {
-    var nextLine = match.group(1)!;
+    final nextLine = match.group(1)!;
 
     if (nextLine.startsWith(' ') || nextLine.isEmpty) {
       emptyBegin = true;
