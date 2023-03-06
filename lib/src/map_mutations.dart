@@ -137,11 +137,11 @@ SourceEdit _replaceInBlockMap(
       !isFlowYamlCollectionNode(newValue) &&
       !isEmpty(newValue)) {
     valueAsString = lineEnding + valueAsString;
-  } else {
-    if (!valueAsString.startsWith(lineEnding)) {
-      // prepend whitespace to ensure there is space after colon.
-      valueAsString = ' ' + valueAsString;
-    }
+  }
+
+  if (!valueAsString.startsWith(lineEnding)) {
+    // prepend whitespace to ensure there is space after colon.
+    valueAsString = ' ' + valueAsString;
   }
 
   /// +1 accounts for the colon
