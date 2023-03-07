@@ -105,31 +105,35 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
     result = '>-\n' + ' ' * indentation;
   }
 
-  /// If the line starts with a empty character (excluding indentation), the
-  /// newline character(\n) before and after the line will be remained.
+  /// [emptyBegin] records the previous line starts with a space or is empty.
+  /// If neither the previous line nor current line starts with a space or
+  /// is not empty, it will duplicate the newline and preserves it in YAML.
   var emptyBegin = false;
-  final replacedString =
-      trimmedString.replaceAllMapped(RegExp(r'\n(.*)'), (match) {
-    final nextLine = match.group(1)!;
+  final lines = trimmedString.split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    final line = lines[i];
 
-    if (nextLine.startsWith(' ') || nextLine.isEmpty) {
+    if (i == 0) {
+      result += line;
+      continue;
+    }
+
+    /// Assumes the user did not try to account for windows documents by using
+    /// `\r\n` already
+    if (line.startsWith(' ') || line.isEmpty) {
+      result += lineEnding + ' ' * indentation + line;
       emptyBegin = true;
-      return lineEnding + ' ' * indentation + nextLine;
-    }
-
-    if (emptyBegin) {
-      emptyBegin = false;
-      return lineEnding + ' ' * indentation + nextLine;
     } else {
+      if (emptyBegin) {
+        result += lineEnding + ' ' * indentation + line;
+      } else {
+        result += lineEnding * 2 + ' ' * indentation + line;
+      }
       emptyBegin = false;
-      return lineEnding * 2 + ' ' * indentation + nextLine;
     }
-  });
+  }
 
-  /// Duplicating the newline for folded strings preserves it in YAML.
-  /// Assumes the user did not try to account for windows documents by using
-  /// `\r\n` already
-  return result + replacedString + removedPortion;
+  return result + removedPortion;
 }
 
 /// Generates a YAML-safe literal string.
