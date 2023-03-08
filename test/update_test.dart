@@ -742,7 +742,7 @@ d: 4
         expectYamlBuilderValue(doc, {'a': 1, 'b': 2, 'c': 3, 'd': 4});
       });
 
-      /// Regression testing to ensure it works without leading wtesttespace
+      // Regression testing to ensure it works without leading whitespace
       test('(2)', () {
         final doc = YamlEditor('a: 1');
         doc.update(['b'], 2);

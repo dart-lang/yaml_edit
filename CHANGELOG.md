@@ -9,7 +9,7 @@
   While this may change the style of the YAML documents written by applications
   that rely on the old behavior, such YAML documents should still be valid.
   Hence, we hope it is reasonable to make this change in a minor release.
-- Fix for cases that can't be encodded correctedly with
+- Fix for cases that can't be encoded correctly with
   `scalarStyle: ScalarStyle.SINGLE_QUOTED`.
 - Fix YamlEditor `appendToList` and `insertIntoList` functions inserts new item into next yaml item
   rather than at end of list.

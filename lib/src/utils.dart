@@ -227,7 +227,7 @@ int getMapIndentation(String yaml, YamlMap map) {
 /// Returns the detected line ending used in [yaml], more specifically, whether
 /// [yaml] appears to use Windows `\r\n` or Unix `\n` line endings.
 ///
-/// The heuristic used is to count all `\n` in the text and if stricly more
+/// The heuristic used is to count all `\n` in the text and if strictly more
 /// than half of them are preceded by `\r` we report that windows line endings
 /// are used.
 String getLineEnding(String yaml) {

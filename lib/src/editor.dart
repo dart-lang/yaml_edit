@@ -14,7 +14,7 @@ import 'strings.dart';
 import 'utils.dart';
 import 'wrap.dart';
 
-/// An interface for modififying [YAML][1] documents while preserving comments
+/// An interface for modifying [YAML][1] documents while preserving comments
 /// and whitespaces.
 ///
 /// YAML parsing is supported by `package:yaml`, and modifications are performed
@@ -355,11 +355,11 @@ class YamlEditor {
 
     final nodesToRemove = list.nodes.getRange(index, index + deleteCount);
 
-    /// Perform addition of elements before removal to avoid scenarioes where
-    /// a block list gets emptied out to {} to avoid changing collection styles
-    /// where possible.
+    // Perform addition of elements before removal to avoid scenarios where
+    // a block list gets emptied out to {} to avoid changing collection styles
+    // where possible.
 
-    /// Reverse [values] and insert them.
+    // Reverse [values] and insert them.
     final reversedValues = values.toList().reversed;
     for (final value in reversedValues) {
       insertIntoList(path, index, value);
