@@ -1,3 +1,7 @@
+## 2.1.1-dev
+
+- Require Dart 2.19
+
 ## 2.1.0
 - **Breaking** `wrapAsYamlNode(value, collectionStyle, scalarStyle)` will apply
   `collectionStyle` and `scalarStyle` recursively when wrapping a children of

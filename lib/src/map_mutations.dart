@@ -87,9 +87,9 @@ SourceEdit _addToBlockMap(
   if (isCollection(newValue) &&
       !isFlowYamlCollectionNode(newValue) &&
       !isEmpty(newValue)) {
-    formattedValue += '$keyString:' + lineEnding + valueString + lineEnding;
+    formattedValue += '$keyString:$lineEnding$valueString$lineEnding';
   } else {
-    formattedValue += '$keyString: ' + valueString + lineEnding;
+    formattedValue += '$keyString: $valueString$lineEnding';
   }
 
   return SourceEdit(offset, 0, formattedValue);
@@ -148,7 +148,7 @@ SourceEdit _replaceInBlockMap(
   /// this.
   if (end < start) end = start;
 
-  return SourceEdit(start, end - start, ' ' + valueAsString);
+  return SourceEdit(start, end - start, ' $valueAsString');
 }
 
 /// Performs the string operation on [yaml] to achieve the effect of replacing
