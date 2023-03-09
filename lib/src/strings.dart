@@ -175,7 +175,6 @@ String yamlEncodeBlockScalar(
 
     final val = value.value;
     if (val is String) {
-      final val = value.value as String;
       if (_hasUnprintableCharacters(val)) {
         return _yamlEncodeDoubleQuoted(val);
       }
