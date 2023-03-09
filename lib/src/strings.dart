@@ -94,14 +94,6 @@ String _tryYamlEncodeSingleQuoted(String string) {
 /// characters by calling [_hasUnprintableCharacters] before invoking this
 /// function.
 String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
-  /// If string starts with whitespaces, we'll fallback to a double quoted string.
-  final leftTrimmedString = string.trimLeft();
-  final leftRemovedPortion =
-      string.substring(0, string.length - leftTrimmedString.length);
-  if (string.isEmpty || leftRemovedPortion.contains(' ')) {
-    return _yamlEncodeDoubleQuoted(string);
-  }
-
   String result;
 
   final rightTrimmedString = string.trimRight();
@@ -149,14 +141,6 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
 /// function.
 String _tryYamlEncodeLiteral(
     String string, int indentation, String lineEnding) {
-  /// If string starts with whitespaces, we'll fallback to a double quoted string.
-  final leftTrimmedString = string.trimLeft();
-  final leftRemovedPortion =
-      string.substring(0, string.length - leftTrimmedString.length);
-  if (string.isEmpty || leftRemovedPortion.contains(' ')) {
-    return _yamlEncodeDoubleQuoted(string);
-  }
-
   String result;
 
   final rightTrimmedString = string.trimRight();

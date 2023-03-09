@@ -9,8 +9,8 @@ import 'package:yaml_edit/yaml_edit.dart';
 final _testStrings = [
   "this is a fairly' long string with\nline breaks",
   "whitespace\n after line breaks",
-  " start with whitespace"
-  "end with line breaks\n"
+  " start with whitespace",
+  "end with line breaks\n",
   "word",
   "foo bar",
   "foo\nbar",
