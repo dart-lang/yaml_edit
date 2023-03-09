@@ -94,12 +94,20 @@ String _tryYamlEncodeSingleQuoted(String string) {
 /// characters by calling [_hasUnprintableCharacters] before invoking this
 /// function.
 String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
+  /// If string starts with whitespaces, we'll fallback to a double quoted string.
+  final leftTrimmedString = string.trimLeft();
+  final leftRemovedPortion =
+      string.substring(0, string.length - leftTrimmedString.length);
+  if (string.isEmpty || leftRemovedPortion.contains(' ')) {
+    return _yamlEncodeDoubleQuoted(string);
+  }
+
   String result;
 
-  final trimmedString = string.trimRight();
-  final removedPortion = string.substring(trimmedString.length);
+  final rightTrimmedString = string.trimRight();
+  final rightRemovedPortion = string.substring(rightTrimmedString.length);
 
-  if (removedPortion.contains('\n')) {
+  if (rightRemovedPortion.contains('\n')) {
     result = '>+\n' + ' ' * indentation;
   } else {
     result = '>-\n' + ' ' * indentation;
@@ -109,7 +117,7 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
   /// If neither the previous line nor current line starts with a space or
   /// is not empty, it will duplicate the newline and preserves it in YAML.
   var emptyBegin = false;
-  final lines = trimmedString.split('\n');
+  final lines = rightTrimmedString.split('\n');
   for (var i = 0; i < lines.length; i++) {
     final line = lines[i];
 
@@ -118,8 +126,6 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
       continue;
     }
 
-    /// Assumes the user did not try to account for windows documents by using
-    /// `\r\n` already
     if (line.startsWith(' ') || line.isEmpty) {
       result += lineEnding + ' ' * indentation + line;
       emptyBegin = true;
@@ -133,7 +139,7 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
     }
   }
 
-  return result + removedPortion;
+  return result + rightRemovedPortion;
 }
 
 /// Generates a YAML-safe literal string.
@@ -143,11 +149,26 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
 /// function.
 String _tryYamlEncodeLiteral(
     String string, int indentation, String lineEnding) {
-  final result = '|-\n$string';
+  /// If string starts with whitespaces, we'll fallback to a double quoted string.
+  final leftTrimmedString = string.trimLeft();
+  final leftRemovedPortion =
+      string.substring(0, string.length - leftTrimmedString.length);
+  if (string.isEmpty || leftRemovedPortion.contains(' ')) {
+    return _yamlEncodeDoubleQuoted(string);
+  }
 
-  /// Assumes the user did not try to account for windows documents by using
-  /// `\r\n` already
-  return result.replaceAll('\n', lineEnding + ' ' * indentation);
+  String result;
+
+  final rightTrimmedString = string.trimRight();
+  final rightRemovedPortion = string.substring(rightTrimmedString.length);
+
+  if (rightRemovedPortion.contains('\n')) {
+    result = '|+' + lineEnding + string;
+  } else {
+    result = '|-' + lineEnding + string;
+  }
+
+  return result.replaceAll('\n', '\n' + ' ' * indentation);
 }
 
 /// Returns [value] with the necessary formatting applied in a flow context
@@ -203,16 +224,12 @@ String yamlEncodeBlockScalar(
         return _tryYamlEncodeSingleQuoted(value.value);
       }
 
-      // Strings with only white spaces will cause a misparsing
-      if (value.value.trim().length == value.value.length &&
-          value.value.length != 0) {
-        if (value.style == ScalarStyle.FOLDED) {
-          return _tryYamlEncodeFolded(value.value, indentation, lineEnding);
-        }
+      if (value.style == ScalarStyle.FOLDED) {
+        return _tryYamlEncodeFolded(value.value, indentation, lineEnding);
+      }
 
-        if (value.style == ScalarStyle.LITERAL) {
-          return _tryYamlEncodeLiteral(value.value, indentation, lineEnding);
-        }
+      if (value.style == ScalarStyle.LITERAL) {
+        return _tryYamlEncodeLiteral(value.value, indentation, lineEnding);
       }
     }
 
