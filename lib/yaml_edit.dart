@@ -10,8 +10,6 @@
 /// ```dart
 library yaml_edit;
 
-import 'package:yaml/yaml.dart';
-import 'package:yaml_edit/src/utils.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 
 ///
@@ -21,7 +19,7 @@ import 'package:yaml_edit/yaml_edit.dart';
 
 export 'src/editor.dart';
 export 'src/source_edit.dart';
-export 'src/wrap.dart' show wrapAsCustomStyledYamlNode;
+import 'src/wrap.dart';
 
 void main() {
   final yamlEditor = YamlEditor('{YAML: YAML}');
@@ -30,7 +28,7 @@ void main() {
       wrapAsCustomStyledYamlNode({
         'title': 'Short string as title',
         'description': [
-          'Multiple lines with losts of text',
+          'Multiple lines with lots of text',
           'that you really makes you want',
           'the YAML to be written with literal strings',
         ].join('\n'),

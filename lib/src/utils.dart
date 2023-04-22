@@ -245,6 +245,54 @@ String getLineEnding(String yaml) {
   return windowsNewlines > unixNewlines ? '\r\n' : '\n';
 }
 
+
+int _sizeOfScalar(dynamic value) => value == null ? 4 : '$value'.length;
+
+CollectionStyle defaultMapStyle(Map map, int depth) {
+  if (map.values.any((value) => value is Map || value is List)) {
+    return CollectionStyle.BLOCK;
+  }
+  final size = map.entries.fold<int>(
+    0,
+        (sum, entry) => sum + _sizeOfScalar(entry.key) +
+        _sizeOfScalar(entry.value),
+  );
+  if (size < 80) {
+    return CollectionStyle.FLOW;
+  }
+  return CollectionStyle.BLOCK;
+}
+
+CollectionStyle defaultListStyle(List list, int depth) {
+  if (list.any((value) => value is Map || value is List)) {
+    return CollectionStyle.BLOCK;
+  }
+  final size = list.fold<int>(
+    0,
+        (sum, value) => sum + _sizeOfScalar(value),
+  );
+  if (size < 80) {
+    return CollectionStyle.FLOW;
+  }
+  return CollectionStyle.BLOCK;
+}
+
+ScalarStyle defaultStringStyle(String string, int depth) {
+  if (string.contains('\n')) {
+    return ScalarStyle.LITERAL;
+  }
+  if (string.length > 80) {
+    return ScalarStyle.FOLDED;
+  }
+  if (!string.contains('\'')) {
+    if (!string.contains('"')) {
+      return ScalarStyle.PLAIN;
+    }
+    return ScalarStyle.SINGLE_QUOTED;
+  }
+  return ScalarStyle.DOUBLE_QUOTED;
+}
+
 extension YamlNodeExtension on YamlNode {
   /// Returns the [CollectionStyle] of `this` if `this` is [YamlMap] or
   /// [YamlList].

@@ -22,14 +22,13 @@ YamlMap updatedYamlMap(YamlMap map, Function(Map) update) {
   return wrapAsYamlNode(dummyMap) as YamlMap;
 }
 
-/// Returns a new [YamlMap] constructed by wrapping YAML file recursively using
-/// [wrapAsCustomStyledYamlNode] onto each node
-/// of this [YamlMap].
+/// Returns a new [YamlMap] constructed by wrapping YAML file recursively
+/// using [wrap] onto each node of this [YamlMap].
 YamlNode wrapAsCustomStyledYamlNode(Object? value, {
-  CollectionStyle Function(Map map, int depth) styleMap = _defaultMapStyle,
-  CollectionStyle Function(List list, int depth) styleList = _defaultListStyle,
+  CollectionStyle Function(Map map, int depth) styleMap = defaultMapStyle,
+  CollectionStyle Function(List list, int depth) styleList = defaultListStyle,
   ScalarStyle Function(String string, int depth) styleString =
-      _defaultStringStyle,
+      defaultStringStyle,
 }) {
   YamlNode wrap(Object? value, int depth) {
     if (value is YamlScalar) {
@@ -65,52 +64,6 @@ YamlNode wrapAsCustomStyledYamlNode(Object? value, {
   }
 
   return wrap(value, 0);
-}
-
-int _sizeOfScalar(dynamic value) => value == null ? 4 : '$value'.length;
-
-CollectionStyle _defaultMapStyle(Map map, int depth) {
-  if (map.values.any((value) => value is Map || value is List)) {
-    return CollectionStyle.BLOCK;
-  }
-  final size = map.entries.fold<int>(
-    0,
-    (sum, entry) => sum + _sizeOfScalar(entry.key) + _sizeOfScalar(entry.value),
-  );
-  if (size < 80) {
-    return CollectionStyle.FLOW;
-  }
-  return CollectionStyle.BLOCK;
-}
-
-CollectionStyle _defaultListStyle(List list, int depth) {
-  if (list.any((value) => value is Map || value is List)) {
-    return CollectionStyle.BLOCK;
-  }
-  final size = list.fold<int>(
-    0,
-    (sum, value) => sum + _sizeOfScalar(value),
-  );
-  if (size < 80) {
-    return CollectionStyle.FLOW;
-  }
-  return CollectionStyle.BLOCK;
-}
-
-ScalarStyle _defaultStringStyle(String string, int depth) {
-  if (string.contains('\n')) {
-    return ScalarStyle.LITERAL;
-  }
-  if (string.length > 80) {
-    return ScalarStyle.FOLDED;
-  }
-  if (!string.contains('\'')) {
-    if (!string.contains('"')) {
-      return ScalarStyle.PLAIN;
-    }
-    return ScalarStyle.SINGLE_QUOTED;
-  }
-  return ScalarStyle.DOUBLE_QUOTED;
 }
 
 /// Wraps [value] into a [YamlNode].
