@@ -22,6 +22,9 @@ YamlMap updatedYamlMap(YamlMap map, Function(Map) update) {
   return wrapAsYamlNode(dummyMap) as YamlMap;
 }
 
+/// Returns a new [YamlMap] constructed by wrapping YAML file recursively using
+/// [wrapAsCustomStyledYamlNode] onto each node
+/// of this [YamlMap].
 YamlNode wrapAsCustomStyledYamlNode(Object? value, {
   CollectionStyle Function(Map map, int depth) styleMap = _defaultMapStyle,
   CollectionStyle Function(List list, int depth) styleList = _defaultListStyle,
