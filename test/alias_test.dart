@@ -13,9 +13,9 @@ void main() {
   group('list ', () {
     test('removing an alias anchor results in AliasError', () {
       final doc = YamlEditor('''
-- &SS Sammy Sosa
-- *SS
-''');
+      - &SS Sammy Sosa
+      - *SS
+      ''');
       expect(() => doc.remove([0]), throwsAliasError);
     });
 
@@ -42,13 +42,12 @@ void main() {
 '''));
     });
   });
-
   group('map', () {
     test('removing an alias anchor value results in AliasError', () {
       final doc = YamlEditor('''
-a: &SS Sammy Sosa
-b: *SS
-''');
+      a: &SS Sammy Sosa
+      b: *SS
+      ''');
 
       expect(() => doc.remove(['a']), throwsAliasError);
     });

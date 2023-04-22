@@ -22,6 +22,94 @@ YamlMap updatedYamlMap(YamlMap map, Function(Map) update) {
   return wrapAsYamlNode(dummyMap) as YamlMap;
 }
 
+YamlNode wrapAsCustomStyledYamlNode(Object? value, {
+  CollectionStyle Function(Map map, int depth) styleMap = _defaultMapStyle,
+  CollectionStyle Function(List list, int depth) styleList = _defaultListStyle,
+  ScalarStyle Function(String string, int depth) styleString =
+      _defaultStringStyle,
+}) {
+  YamlNode wrap(Object? value, int depth) {
+    if (value is YamlScalar) {
+      wrapAsYamlNode(value); // assert valid scalar
+      return value;
+    } else if (value is YamlList) {
+      for (final item in value.nodes) {
+        wrapAsYamlNode(item); // assert valid scalar
+      }
+      return value;
+    } else if (value is YamlMap) {
+      /// Both [entry.key] and [entry.values] are guaranteed to be [YamlNode]s,
+      /// so running this will just assert that they are valid scalars.
+      for (final entry in value.nodes.entries) {
+        wrapAsYamlNode(entry.key);
+        wrapAsYamlNode(entry.value);
+      }
+      return value;
+    } else if (value is Map) {
+      return wrapAsYamlNode({
+        for (final kv in value.entries)
+          wrap(kv.key, depth + 1): wrap(kv.value, depth + 1),
+      }, collectionStyle: styleMap(value, depth));
+    } else if (value is List) {
+      return wrapAsYamlNode({
+        for (final v in value) wrap(v, depth + 1),
+      }, collectionStyle: styleList(value, depth));
+    } else if (value is String) {
+      return wrapAsYamlNode(value, scalarStyle: styleString(value, depth));
+    } else {
+      return wrapAsYamlNode(value);
+    }
+  }
+
+  return wrap(value, 0);
+}
+
+int _sizeOfScalar(dynamic value) => value == null ? 4 : '$value'.length;
+
+CollectionStyle _defaultMapStyle(Map map, int depth) {
+  if (map.values.any((value) => value is Map || value is List)) {
+    return CollectionStyle.BLOCK;
+  }
+  final size = map.entries.fold<int>(
+    0,
+    (sum, entry) => sum + _sizeOfScalar(entry.key) + _sizeOfScalar(entry.value),
+  );
+  if (size < 80) {
+    return CollectionStyle.FLOW;
+  }
+  return CollectionStyle.BLOCK;
+}
+
+CollectionStyle _defaultListStyle(List list, int depth) {
+  if (list.any((value) => value is Map || value is List)) {
+    return CollectionStyle.BLOCK;
+  }
+  final size = list.fold<int>(
+    0,
+    (sum, value) => sum + _sizeOfScalar(value),
+  );
+  if (size < 80) {
+    return CollectionStyle.FLOW;
+  }
+  return CollectionStyle.BLOCK;
+}
+
+ScalarStyle _defaultStringStyle(String string, int depth) {
+  if (string.contains('\n')) {
+    return ScalarStyle.LITERAL;
+  }
+  if (string.length > 80) {
+    return ScalarStyle.FOLDED;
+  }
+  if (!string.contains('\'')) {
+    if (!string.contains('"')) {
+      return ScalarStyle.PLAIN;
+    }
+    return ScalarStyle.SINGLE_QUOTED;
+  }
+  return ScalarStyle.DOUBLE_QUOTED;
+}
+
 /// Wraps [value] into a [YamlNode].
 ///
 /// [Map]s, [List]s and Scalars will be wrapped as [YamlMap]s, [YamlList]s,

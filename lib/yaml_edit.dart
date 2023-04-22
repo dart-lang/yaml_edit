@@ -8,20 +8,35 @@
 ///
 /// **Example**
 /// ```dart
-/// import 'package:yaml_edit/yaml_edit.dart';
+library yaml_edit;
+
+import 'package:yaml/yaml.dart';
+import 'package:yaml_edit/src/utils.dart';
+import 'package:yaml_edit/yaml_edit.dart';
+
 ///
-/// void main() {
-///   final yamlEditor = YamlEditor('{YAML: YAML}');
-///   yamlEditor.update(['YAML'], "YAML Ain't Markup Language");
-///   print(yamlEditor);
-///   // Expected Output:
-///   // {YAML: YAML Ain't Markup Language}
-/// }
 /// ```
 ///
 /// [1]: https://yaml.org/
-library yaml_edit;
 
 export 'src/editor.dart';
 export 'src/source_edit.dart';
-export 'src/wrap.dart' show wrapAsYamlNode;
+export 'src/wrap.dart' show wrapAsCustomStyledYamlNode;
+
+void main() {
+  final yamlEditor = YamlEditor('{YAML: YAML}');
+  yamlEditor.update(
+      [],
+      wrapAsCustomStyledYamlNode({
+        'title': 'Short string as title',
+        'description': [
+          'Multiple lines with losts of text',
+          'that you really makes you want',
+          'the YAML to be written with literal strings',
+        ].join('\n'),
+      }));
+
+  print(yamlEditor);
+  // Expected Output:
+  // {YAML: YAML Ain't Markup Language}
+}

@@ -127,14 +127,14 @@ class YamlEditor {
             collectAliases(key as YamlNode);
             collectAliases(value);
           });
-        } else if (node is YamlList) {
+        }
+        else if (node is YamlList) {
           node.nodes.forEach(collectAliases);
         }
       } else {
         _aliases.add(node);
       }
     }
-
     collectAliases(_contents);
   }
 
