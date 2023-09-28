@@ -1,4 +1,4 @@
-# 2.2.0
+## 2.2.0
 - `AliasError` is changed to `AliasException` and exposed in the public API.
 
   All node-mutating methods on `YamlEditor`, i.e. `update()`, `appendToList()`,
