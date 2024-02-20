@@ -1,3 +1,7 @@
+## 2.2.1
+- Fix inconsistent line endings when inserting maps into a document using `\r\n`.
+  ([#65](https://github.com/dart-lang/yaml_edit/issues/65))
+
 ## 2.2.0
 - `AliasError` is changed to `AliasException` and exposed in the public API.
 
