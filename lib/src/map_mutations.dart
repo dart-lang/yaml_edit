@@ -184,8 +184,9 @@ SourceEdit _removeFromBlockMap(
     if (nextNewLine != -1) {
       // Remove everything up to the next newline, this strips comments that
       // follows on the same line as the value we're removing.
-      // It also fixes bugs when empty string represents `null`, and [end] with
-      // then otherwise point to the colon.
+      // It also ensures we consume colon when [valueNode.value] is `null`
+      // because there is no value (e.g. `key: \n`). Because [valueNode.span] in
+      // such cases point to the colon `:`.
       end = nextNewLine;
     }
     return SourceEdit(start, end - start, '{}');
