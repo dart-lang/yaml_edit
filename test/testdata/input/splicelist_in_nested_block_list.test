@@ -1,0 +1,7 @@
+SLICE LIST IN NESTED BLOCK LIST
+---
+key:
+- true
+- - false
+---
+- [splice, [key, 1], 0, 1, ['test']]
