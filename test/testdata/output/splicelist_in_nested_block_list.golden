@@ -1,7 +1,40 @@
 key:
-- true
-- - false
+ - foo:
+   - - bar:
+ - - - false
+ - - - false
+ - - - false
 ---
 key:
-- true
-- - test
+ - pre-foo
+ - foo:
+   - - bar:
+ - - - false
+ - - - false
+ - - - false
+---
+key:
+ - pre-foo
+ - foo:
+   - - test
+ - - - false
+ - - - false
+ - - - false
+---
+key:
+ - pre-foo
+ - foo:
+   - - test
+ - - test
+   - - false
+ - - - false
+ - - - false
+---
+key:
+ - pre-foo
+ - foo:
+   - - test
+ - - test
+   - - false
+ - - - false
+ - tail-foo
