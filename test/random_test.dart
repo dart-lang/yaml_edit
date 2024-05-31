@@ -51,7 +51,6 @@ dev_dependencies:
           );
         }
       },
-      skip: 'Remove once issue #85 is fixed',
     );
   }
 }
