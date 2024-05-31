@@ -112,7 +112,7 @@ SourceEdit _appendToFlowList(
 /// block list.
 SourceEdit _appendToBlockList(
     YamlEditor yamlEdit, YamlList list, YamlNode item) {
-  var formattedValue = _formatNewBlock(yamlEdit, list, item);
+  var (formattedValue, _) = _formatNewBlock(yamlEdit, list, item);
   final yaml = yamlEdit.toString();
   var offset = list.span.end.offset;
 
@@ -132,7 +132,8 @@ SourceEdit _appendToBlockList(
 }
 
 /// Formats [item] into a new node for block lists.
-String _formatNewBlock(YamlEditor yamlEdit, YamlList list, YamlNode item) {
+(String formatted, String indent) _formatNewBlock(
+    YamlEditor yamlEdit, YamlList list, YamlNode item) {
   final yaml = yamlEdit.toString();
   final listIndentation = getListIndentation(yaml, list);
   final newIndentation = listIndentation + getIndentation(yamlEdit);
@@ -142,9 +143,12 @@ String _formatNewBlock(YamlEditor yamlEdit, YamlList list, YamlNode item) {
   if (isCollection(item) && !isFlowYamlCollectionNode(item) && !isEmpty(item)) {
     valueString = valueString.substring(newIndentation);
   }
-  final indentedHyphen = '${' ' * listIndentation}- ';
 
-  return '$indentedHyphen$valueString$lineEnding';
+  // Pass back the indentation for use
+  final hyphenIndentation = ' ' * listIndentation;
+  final indentedHyphen = '$hyphenIndentation- ';
+
+  return ('$indentedHyphen$valueString$lineEnding', hyphenIndentation);
 }
 
 /// Formats [item] into a new node for flow lists.
@@ -172,14 +176,39 @@ SourceEdit _insertInBlockList(
 
   if (index == list.length) return _appendToBlockList(yamlEdit, list, item);
 
-  final formattedValue = _formatNewBlock(yamlEdit, list, item);
+  var (formattedValue, indent) = _formatNewBlock(yamlEdit, list, item);
 
   final currNode = list.nodes[index];
   final currNodeStart = currNode.span.start.offset;
   final yaml = yamlEdit.toString();
-  final start = yaml.lastIndexOf('\n', currNodeStart) + 1;
 
-  return SourceEdit(start, 0, formattedValue);
+  var currSequenceOffset = yaml.lastIndexOf('-', currNodeStart - 1);
+
+  final (isNested, offset) = _isNestedInBlockList(currSequenceOffset - 1, yaml);
+
+  /// We have to get rid of the left indentation applied by default
+  if (isNested && index == 0) {
+    // Give the previous first element its indent
+    formattedValue = formattedValue.trimLeft() + indent;
+  }
+
+  return SourceEdit(offset, 0, formattedValue);
+}
+
+/// Checks if the [YamlNode]'s list is directly nested within another list
+(bool isNested, int offset) _isNestedInBlockList(int start, String yaml) {
+  if (start < 0) return (false, 0);
+
+  final newLineStart = yaml.lastIndexOf('\n', start);
+  final seqStart = yaml.lastIndexOf('-', start);
+
+  /// Anytime our '-' is non-existent, use '\n' as source of truth. Also, if
+  /// the new line is closer
+  if (newLineStart == seqStart || newLineStart > seqStart) {
+    return (false, newLineStart + 1);
+  }
+
+  return (true, seqStart + 2); // Inclusive of space
 }
 
 /// Returns a [SourceEdit] describing the change to be made on [yamlEdit] to
