@@ -204,7 +204,7 @@ SourceEdit _insertInBlockList(
 
   /// Anytime our '-' is non-existent, use '\n' as source of truth. Also, if
   /// the new line is closer
-  if (newLineStart == seqStart || newLineStart > seqStart) {
+  if (newLineStart >= seqStart) {
     return (false, newLineStart + 1);
   }
 
