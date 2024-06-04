@@ -182,28 +182,96 @@ SourceEdit _insertInBlockList(
   final currNodeStart = currNode.span.start.offset;
   final yaml = yamlEdit.toString();
 
-  var currSequenceOffset = yaml.lastIndexOf('-', currNodeStart - 1);
+  final currSequenceOffset = yaml.lastIndexOf('-', currNodeStart - 1);
 
-  final (isNested, offset) = _isNestedInBlockList(currSequenceOffset - 1, yaml);
+  final (isNested, offset) = _isNestedInBlockList(currSequenceOffset, yaml);
 
   /// We have to get rid of the left indentation applied by default
   if (isNested && index == 0) {
-    // Give the previous first element its indent
-    formattedValue = formattedValue.trimLeft() + indent;
+    /// The [insertionIndex] will be equal to the start of
+    /// [currentSequenceOffset] of the element we are inserting before in most
+    /// cases.
+    ///
+    /// Example:
+    ///
+    ///   - - value
+    ///     ^ Inserting before this and we get rid of indent
+    ///
+    /// If not, we need to account for the space between them that is not an
+    /// indent.
+    ///
+    /// Example:
+    ///
+    ///   -   - value
+    ///       ^ Inserting before this and we get rid of indent. But also account
+    ///         for space in between
+    final leftPad = currSequenceOffset - offset;
+    final padding = ' ' * leftPad;
+
+    /// Since we CANT'T/SHOULDN'T manipulate the next element to get rid of the 
+    /// space it has, we remove the padding (if any is present) from the indent 
+    /// itself.
+    indent = indent.replaceFirst(padding, '');
+
+    // Give the indent to the first element
+    formattedValue = '$padding${formattedValue.trimLeft()}$indent';
   }
 
   return SourceEdit(offset, 0, formattedValue);
 }
 
-/// Checks if the [YamlNode]'s list is directly nested within another list
-(bool isNested, int offset) _isNestedInBlockList(int start, String yaml) {
-  if (start < 0) return (false, 0);
+/// Determines if the list containing an element is nested within another list. 
+/// The [currentSequenceOffset] indicates the index of the element's `-` and
+/// [yaml] represents the entire yaml document.
+/// 
+/// ```yaml
+/// # Returns true
+/// - - value
+/// 
+/// # Returns true
+/// -       - value
+/// 
+/// # Returns false
+/// key:
+///   - value
+/// 
+/// # Returns false. Even though nested, a "\n" precedes the previous "-" 
+/// -
+///   - value
+/// ```
+(bool isNested, int offset) _isNestedInBlockList(
+    int currentSequenceOffset, String yaml) {
+  final startIndex = currentSequenceOffset - 1;
 
-  final newLineStart = yaml.lastIndexOf('\n', start);
-  final seqStart = yaml.lastIndexOf('-', start);
+  /// Indicates the element we are inserting before is at index `0` of the list
+  /// at the root of the yaml
+  ///
+  /// Example:
+  ///
+  /// - foo
+  /// ^ Inserting before this
+  if (startIndex < 0) return (false, 0);
 
-  /// Anytime our '-' is non-existent, use '\n' as source of truth. Also, if
-  /// the new line is closer
+  final newLineStart = yaml.lastIndexOf('\n', startIndex);
+  final seqStart = yaml.lastIndexOf('-', startIndex);
+
+  /// Indicates that a `\n` is closer to the last `-`. Meaning this list is not
+  /// nested.
+  ///
+  /// Example:
+  ///
+  ///   key:
+  ///     - value
+  ///     ^ Inserting before this and we need to keep the indent.
+  ///
+  /// Also this list may be nested but the nested list starts its indent after
+  /// a new line.
+  ///
+  /// Example:
+  ///
+  ///   -
+  ///     - value
+  ///     ^ Inserting before this and we need to keep the indent.
   if (newLineStart >= seqStart) {
     return (false, newLineStart + 1);
   }
