@@ -208,8 +208,8 @@ SourceEdit _insertInBlockList(
     final leftPad = currSequenceOffset - offset;
     final padding = ' ' * leftPad;
 
-    /// Since we CANT'T/SHOULDN'T manipulate the next element to get rid of the 
-    /// space it has, we remove the padding (if any is present) from the indent 
+    /// Since we CANT'T/SHOULDN'T manipulate the next element to get rid of the
+    /// space it has, we remove the padding (if any is present) from the indent
     /// itself.
     indent = indent.replaceFirst(padding, '');
 
@@ -220,22 +220,22 @@ SourceEdit _insertInBlockList(
   return SourceEdit(offset, 0, formattedValue);
 }
 
-/// Determines if the list containing an element is nested within another list. 
+/// Determines if the list containing an element is nested within another list.
 /// The [currentSequenceOffset] indicates the index of the element's `-` and
 /// [yaml] represents the entire yaml document.
-/// 
+///
 /// ```yaml
 /// # Returns true
 /// - - value
-/// 
+///
 /// # Returns true
 /// -       - value
-/// 
+///
 /// # Returns false
 /// key:
 ///   - value
-/// 
-/// # Returns false. Even though nested, a "\n" precedes the previous "-" 
+///
+/// # Returns false. Even though nested, a "\n" precedes the previous "-"
 /// -
 ///   - value
 /// ```
