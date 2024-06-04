@@ -2,6 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
+import 'package:collection/collection.dart';
 import 'package:yaml/yaml.dart';
 
 import 'utils.dart';
@@ -94,24 +95,57 @@ String _tryYamlEncodeSingleQuoted(String string) {
 /// It is important that we ensure that [string] is free of unprintable
 /// characters by calling [_hasUnprintableCharacters] before invoking this
 /// function.
-String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
-  String result;
+String _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
+  var (literalPrefix, indent, trimmedString, stripped) = _prepareBlockString(
+    '>',
+    string,
+    indentSize,
+    lineEnding,
+  );
 
-  final trimmedString = string.trimRight();
-  final removedPortion = string.substring(trimmedString.length);
+  // Try folding if string has any non-empty values
+  if (trimmedString.isNotEmpty) {
+    final trimmedSplit = trimmedString.split(lineEnding);
 
-  if (removedPortion.contains('\n')) {
-    result = '>+\n${' ' * indentation}';
-  } else {
-    result = '>-\n${' ' * indentation}';
+    // Apply the left indent. First line didn't have indent.
+    final first = indent + trimmedSplit[0];
+
+    if (trimmedSplit.length > 1) {
+      /// Try folding to match specification:
+      /// * https://yaml.org/spec/1.2.2/#65-line-folding
+      trimmedString =
+          trimmedSplit.foldIndexed(first, (index, previous, current) {
+        if (index == 0) return previous;
+
+        /// If initially empty, this line holds only `\n`. It's okay. Also, if
+        /// this line is just an empty space.
+        ///
+        /// See https://yaml.org/spec/1.2.2/#64-empty-lines
+        if (current.trim().isEmpty) return previous + lineEnding + current;
+
+        var updated = current;
+
+        /// For consecutive non-empty lines, we add a `\n` with a space.
+        ///
+        /// We need to ensure the ACTUAL previous string was non-empty
+        if (trimmedSplit[index - 1].trim().isNotEmpty) {
+          /// We remove indent and check if the string starts with a space.
+          ///
+          /// Apply `\n` for `foo\nbar` but not `foo\n bar`.
+          if (!current.replaceFirst(indent, '').startsWith(' ')) {
+            updated = lineEnding + updated;
+          }
+        }
+
+        /// Apply `\n` by default if no operation occurred
+        return previous + lineEnding + updated;
+      });
+    } else {
+      trimmedString = first;
+    }
   }
 
-  /// Duplicating the newline for folded strings preserves it in YAML.
-  /// Assumes the user did not try to account for windows documents by using
-  /// `\r\n` already
-  return result +
-      trimmedString.replaceAll('\n', lineEnding * 2 + ' ' * indentation) +
-      removedPortion;
+  return literalPrefix + trimmedString + stripped;
 }
 
 /// Generates a YAML-safe literal string.
@@ -119,13 +153,45 @@ String _tryYamlEncodeFolded(String string, int indentation, String lineEnding) {
 /// It is important that we ensure that [string] is free of unprintable
 /// characters by calling [_hasUnprintableCharacters] before invoking this
 /// function.
-String _tryYamlEncodeLiteral(
-    String string, int indentation, String lineEnding) {
-  final result = '|-\n$string';
+String _tryYamlEncodeLiteral(String string, int indentSize, String lineEnding) {
+  final (literalPrefix, indent, trimmedString, stripped) = _prepareBlockString(
+    '|',
+    string,
+    indentSize,
+    lineEnding,
+  );
 
-  /// Assumes the user did not try to account for windows documents by using
-  /// `\r\n` already
-  return result.replaceAll('\n', lineEnding + ' ' * indentation);
+  /// Simplest block style.
+  /// * https://yaml.org/spec/1.2.2/#812-literal-style
+  return literalPrefix + indent + trimmedString + stripped;
+}
+
+/// Prepares a string to be encoded either via [_tryYamlEncodeLiteral] or
+/// [_tryYamlEncodeFolded] when in [CollectionStyle.BLOCK].
+(
+  String literalPrefix,
+  String indent,
+  String trimmedString,
+  String strippedString,
+) _prepareBlockString(
+    String blockIndicator, String string, int indentSize, String lineEnding) {
+  final trimmed = string.trimRight();
+  final stripped = string.substring(trimmed.length);
+
+  final chompingIndicator =
+      string.endsWith('\n') || string.endsWith(' ') ? '+' : '-';
+
+  final indent = ' ' * indentSize;
+
+  return (
+    '$blockIndicator$chompingIndicator$lineEnding',
+    indent,
+
+    /// Assumes the user did not try to account for windows documents by using
+    /// `\r\n` already
+    trimmed.replaceAll('\n', lineEnding + indent),
+    stripped,
+  );
 }
 
 /// Returns [value] with the necessary formatting applied in a flow context
