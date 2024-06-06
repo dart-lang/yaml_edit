@@ -112,7 +112,9 @@ SourceEdit _appendToFlowList(
 /// block list.
 SourceEdit _appendToBlockList(
     YamlEditor yamlEdit, YamlList list, YamlNode item) {
-  var (formattedValue, _) = _formatNewBlock(yamlEdit, list, item);
+  var (indentSize, valueToIndent) = _formatNewBlock(yamlEdit, list, item);
+  var formattedValue = '${' ' * indentSize}$valueToIndent';
+
   final yaml = yamlEdit.toString();
   var offset = list.span.end.offset;
 
@@ -132,7 +134,7 @@ SourceEdit _appendToBlockList(
 }
 
 /// Formats [item] into a new node for block lists.
-(String formatted, String indent) _formatNewBlock(
+(int indentSize, String valueStringToIndent) _formatNewBlock(
     YamlEditor yamlEdit, YamlList list, YamlNode item) {
   final yaml = yamlEdit.toString();
   final listIndentation = getListIndentation(yaml, list);
@@ -144,11 +146,7 @@ SourceEdit _appendToBlockList(
     valueString = valueString.substring(newIndentation);
   }
 
-  // Pass back the indentation for use
-  final hyphenIndentation = ' ' * listIndentation;
-  final indentedHyphen = '$hyphenIndentation- ';
-
-  return ('$indentedHyphen$valueString$lineEnding', hyphenIndentation);
+  return (listIndentation, '- $valueString$lineEnding');
 }
 
 /// Formats [item] into a new node for flow lists.
@@ -176,7 +174,7 @@ SourceEdit _insertInBlockList(
 
   if (index == list.length) return _appendToBlockList(yamlEdit, list, item);
 
-  var (formattedValue, indent) = _formatNewBlock(yamlEdit, list, item);
+  var (indentSize, formattedValue) = _formatNewBlock(yamlEdit, list, item);
 
   final currNode = list.nodes[index];
   final currNodeStart = currNode.span.start.offset;
@@ -208,13 +206,13 @@ SourceEdit _insertInBlockList(
     final leftPad = currSequenceOffset - offset;
     final padding = ' ' * leftPad;
 
-    /// Since we CANT'T/SHOULDN'T manipulate the next element to get rid of the
-    /// space it has, we remove the padding (if any is present) from the indent
-    /// itself.
-    indent = indent.replaceFirst(padding, '');
+    final indent = ' ' * (indentSize - leftPad);
 
     // Give the indent to the first element
     formattedValue = '$padding${formattedValue.trimLeft()}$indent';
+  } else {
+    final indent = ' ' * indentSize; // Calculate indent normally
+    formattedValue = '$indent$formattedValue';
   }
 
   return SourceEdit(offset, 0, formattedValue);
