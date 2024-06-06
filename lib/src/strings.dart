@@ -96,10 +96,12 @@ String _tryYamlEncodeSingleQuoted(String string) {
 /// characters by calling [_hasUnprintableCharacters] before invoking this
 /// function.
 String _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
-  var (literalPrefix, indent, trimmedString, stripped) = _prepareBlockString(
+  final indent = ' ' * indentSize;
+
+  var (literalPrefix, trimmedString, stripped) = _prepareBlockString(
     '>',
     string,
-    indentSize,
+    indent,
     lineEnding,
   );
 
@@ -154,10 +156,12 @@ String _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
 /// characters by calling [_hasUnprintableCharacters] before invoking this
 /// function.
 String _tryYamlEncodeLiteral(String string, int indentSize, String lineEnding) {
-  final (literalPrefix, indent, trimmedString, stripped) = _prepareBlockString(
+  final indent = ' ' * indentSize;
+
+  final (literalPrefix, trimmedString, stripped) = _prepareBlockString(
     '|',
     string,
-    indentSize,
+    indent,
     lineEnding,
   );
 
@@ -170,25 +174,18 @@ String _tryYamlEncodeLiteral(String string, int indentSize, String lineEnding) {
 /// [_tryYamlEncodeFolded] when in [CollectionStyle.BLOCK].
 (
   String literalPrefix,
-  String indent,
   String trimmedString,
-  String strippedString,
+  String strippedString
 ) _prepareBlockString(
-    String blockIndicator, String string, int indentSize, String lineEnding) {
+    String blockIndicator, String string, String indent, String lineEnding) {
   final trimmed = string.trimRight();
   final stripped = string.substring(trimmed.length);
 
   final chompingIndicator =
       string.endsWith('\n') || string.endsWith(' ') ? '+' : '-';
 
-  final indent = ' ' * indentSize;
-
   return (
     '$blockIndicator$chompingIndicator$lineEnding',
-    indent,
-
-    /// Assumes the user did not try to account for windows documents by using
-    /// `\r\n` already
     trimmed.replaceAll('\n', lineEnding + indent),
     stripped,
   );
