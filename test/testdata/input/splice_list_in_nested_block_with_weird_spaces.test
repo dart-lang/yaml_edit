@@ -11,4 +11,3 @@ key:
  - [splice, [key, 2], 1, 0, ['post-baz']]
  - [splice, [key, 2], 0, 0, ['pre-baz']]
  - [splice, [key, 1], 0, 0, ['pre-foo']]
- 
