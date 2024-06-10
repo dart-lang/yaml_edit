@@ -33,7 +33,7 @@ void main() {
       final doc = YamlEditor('''
 - 1
 - 2
-- 
+-
    - 3
    - 4''');
       expect(getIndentation(doc), equals(3));
@@ -53,7 +53,7 @@ c:
       final doc = YamlEditor('''
 - 1
 - 2
-- 
+-
     d: 4
     e: 5''');
       expect(getIndentation(doc), equals(4));
@@ -64,7 +64,7 @@ c:
       final doc = YamlEditor('''
 - 1
 - 2
-- 
+-
     ? d
     : 4''');
       expect(getIndentation(doc), equals(4));
@@ -318,11 +318,33 @@ strings:
     test'''));
       });
 
+      test('generates folded strings with trailing line break and space', () {
+        final doc = YamlEditor('');
+
+        doc.update(
+          [],
+          wrapAsYamlNode('test\ntest\n ', scalarStyle: ScalarStyle.FOLDED),
+        );
+
+        expect(doc.toString(), equals('>+\n  test\n\n  test\n   '));
+      });
+
       test('generates literal strings properly', () {
         final doc = YamlEditor('');
         doc.update(
             [], wrapAsYamlNode('test\ntest', scalarStyle: ScalarStyle.LITERAL));
         expect(doc.toString(), equals('|-\n  test\n  test'));
+      });
+
+      test('generates literal string with trailing line break and space', () {
+        final doc = YamlEditor('');
+
+        doc.update(
+          [],
+          wrapAsYamlNode('test\ntest\n ', scalarStyle: ScalarStyle.LITERAL),
+        );
+
+        expect(doc.toString(), equals('|+\n  test\n  test\n   '));
       });
 
       test('rewrites literal strings properly', () {

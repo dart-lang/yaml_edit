@@ -14,6 +14,7 @@ final _testStrings = [
   'whitespace and line breaks at end 2 \n \n',
   'whitespace and line breaks at end 3 \n\n',
   'whitespace and line breaks at end 3 \n\n ',
+  '\n line break at the start',
   'word',
   'foo bar',
   'foo\nbar',
