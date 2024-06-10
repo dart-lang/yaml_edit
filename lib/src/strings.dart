@@ -51,6 +51,37 @@ bool _hasUnprintableCharacters(String string) {
   return false;
 }
 
+/// Checks if a [string] has any unprintable characters or characters that
+/// should be explicitly wrapped in double quotes according to
+/// [unprintableCharCodes] and [doubleQuoteEscapeChars] respectively.
+///
+/// It should be noted that this check excludes the `\n` (line break)
+/// character as it is encoded correctly when using [ScalarStyle.LITERAL] or
+/// [ScalarStyle.FOLDED].
+bool _shouldDoubleQuote(String string) {
+  if (string.isEmpty || string.trimLeft().length != string.length) return true;
+
+  final codeUnits = string.codeUnits;
+
+  return doubleQuoteEscapeChars.keys
+      .whereNot((charUnit) => charUnit == 10) // Anything but line breaks
+      .any(codeUnits.contains);
+}
+
+/// Returns the correct block chomping indicator for [ScalarStyle.FOLDED]
+/// and [ScalarStyle.LITERAL].
+///
+/// See https://yaml.org/spec/1.2.2/#8112-block-chomping-indicator
+String _getChompingIndicator(String string) {
+  /// By default, we apply an indent to the string after every new line.
+  ///
+  /// Apply the `keep (+)` chomping indicator for trailing whitespace to be
+  /// treated as content.
+  if (string.endsWith('\n ') || string.endsWith('\n')) return '+';
+
+  return '-';
+}
+
 /// Generates a YAML-safe double-quoted string based on [string], escaping the
 /// list of characters as defined by the YAML 1.2 spec.
 ///
@@ -74,7 +105,7 @@ String _yamlEncodeDoubleQuoted(String string) {
 /// It is important that we ensure that [string] is free of unprintable
 /// characters by calling [_hasUnprintableCharacters] before invoking this
 /// function.
-String _tryYamlEncodeSingleQuoted(String string) {
+String? _tryYamlEncodeSingleQuoted(String string) {
   // If [string] contains a newline we'll use double quoted strings instead.
   // Single quoted strings can represent newlines, but then we have to use an
   // empty line (replace \n with \n\n). But since leading spaces following
@@ -83,9 +114,8 @@ String _tryYamlEncodeSingleQuoted(String string) {
   // we'll fallback to a double quoted string.
   // TODO: Consider if we should make '\n' an unprintedable, this might make
   //       folded strings into double quoted -- some work is needed here.
-  if (string.contains('\n')) {
-    return _yamlEncodeDoubleQuoted(string);
-  }
+  if (string.contains('\n')) return null;
+
   final result = string.replaceAll('\'', '\'\'');
   return '\'$result\'';
 }
@@ -95,59 +125,47 @@ String _tryYamlEncodeSingleQuoted(String string) {
 /// It is important that we ensure that [string] is free of unprintable
 /// characters by calling [_hasUnprintableCharacters] before invoking this
 /// function.
-String _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
+String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
+  if (_shouldDoubleQuote(string)) return null;
+
   final indent = ' ' * indentSize;
 
-  var (literalPrefix, trimmedString, stripped) = _prepareBlockString(
-    '>',
-    string,
-    indent,
-    lineEnding,
-  );
+  /// Remove trailing `\n` & white-space to ease string folding
+  var trimmed = string.trimRight();
+  final stripped = string.substring(trimmed.length);
 
-  // Try folding if string has any non-empty values
-  if (trimmedString.isNotEmpty) {
-    final trimmedSplit = trimmedString.split(lineEnding);
+  final trimmedSplit =
+      trimmed.replaceAll('\n', lineEnding + indent).split(lineEnding);
 
-    // Apply the left indent. First line didn't have indent.
-    final first = indent + trimmedSplit[0];
+  /// Try folding to match specification:
+  /// * https://yaml.org/spec/1.2.2/#65-line-folding
+  trimmed = trimmedSplit.reduceIndexed((index, previous, current) {
+    var updated = current;
 
-    if (trimmedSplit.length > 1) {
-      /// Try folding to match specification:
-      /// * https://yaml.org/spec/1.2.2/#65-line-folding
-      trimmedString =
-          trimmedSplit.foldIndexed(first, (index, previous, current) {
-        if (index == 0) return previous;
-
-        /// If initially empty, this line holds only `\n`. It's okay. Also, if
-        /// this line is just an empty space.
-        ///
-        /// See https://yaml.org/spec/1.2.2/#64-empty-lines
-        if (current.trim().isEmpty) return previous + lineEnding + current;
-
-        var updated = current;
-
-        /// For consecutive non-empty lines, we add a `\n` with a space.
-        ///
-        /// We need to ensure the ACTUAL previous string was non-empty
-        if (trimmedSplit[index - 1].trim().isNotEmpty) {
-          /// We remove indent and check if the string starts with a space.
-          ///
-          /// Apply `\n` for `foo\nbar` but not `foo\n bar`.
-          if (!current.replaceFirst(indent, '').startsWith(' ')) {
-            updated = lineEnding + updated;
-          }
-        }
-
-        /// Apply `\n` by default if no operation occurred
-        return previous + lineEnding + updated;
-      });
-    } else {
-      trimmedString = first;
+    /// If initially empty, this line holds only `\n` or white-space. This
+    /// tells us we don't need to apply an additional `\n`.
+    ///
+    /// See https://yaml.org/spec/1.2.2/#64-empty-lines
+    ///
+    /// If this line is not empty, we need to apply an additional `\n` if and
+    /// only if:
+    ///   1. The preceding line was non-empty too
+    ///   2. If the current line doesn't begin with white-space
+    ///
+    /// Such that we apply `\n` for `foo\nbar` but not `foo\n bar`.
+    if (current.trim().isNotEmpty &&
+        trimmedSplit[index - 1].trim().isNotEmpty &&
+        !current.replaceFirst(indent, '').startsWith(' ')) {
+      updated = lineEnding + updated;
     }
-  }
 
-  return literalPrefix + trimmedString + stripped;
+    /// Apply a `\n` by default.
+    return previous + lineEnding + updated;
+  });
+
+  return '>${_getChompingIndicator(string)}\n'
+      '$indent$trimmed'
+      '${stripped.replaceAll('\n', lineEnding + indent)}';
 }
 
 /// Generates a YAML-safe literal string.
@@ -155,40 +173,16 @@ String _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
 /// It is important that we ensure that [string] is free of unprintable
 /// characters by calling [_hasUnprintableCharacters] before invoking this
 /// function.
-String _tryYamlEncodeLiteral(String string, int indentSize, String lineEnding) {
-  final indent = ' ' * indentSize;
+String? _tryYamlEncodeLiteral(
+    String string, int indentSize, String lineEnding) {
+  if (_shouldDoubleQuote(string)) return null;
 
-  final (literalPrefix, trimmedString, stripped) = _prepareBlockString(
-    '|',
-    string,
-    indent,
-    lineEnding,
-  );
+  final indent = ' ' * indentSize;
 
   /// Simplest block style.
   /// * https://yaml.org/spec/1.2.2/#812-literal-style
-  return literalPrefix + indent + trimmedString + stripped;
-}
-
-/// Prepares a string to be encoded either via [_tryYamlEncodeLiteral] or
-/// [_tryYamlEncodeFolded] when in [CollectionStyle.BLOCK].
-(
-  String literalPrefix,
-  String trimmedString,
-  String strippedString
-) _prepareBlockString(
-    String blockIndicator, String string, String indent, String lineEnding) {
-  final trimmed = string.trimRight();
-  final stripped = string.substring(trimmed.length);
-
-  final chompingIndicator =
-      string.endsWith('\n') || string.endsWith(' ') ? '+' : '-';
-
-  return (
-    '$blockIndicator$chompingIndicator$lineEnding',
-    trimmed.replaceAll('\n', lineEnding + indent),
-    stripped,
-  );
+  return '|${_getChompingIndicator(string)}\n$indent'
+      '${string.replaceAll('\n', lineEnding + indent)}';
 }
 
 /// Returns [value] with the necessary formatting applied in a flow context
@@ -210,7 +204,7 @@ String _yamlEncodeFlowScalar(YamlNode value) {
       }
 
       if (value.style == ScalarStyle.SINGLE_QUOTED) {
-        return _tryYamlEncodeSingleQuoted(val);
+        return _tryYamlEncodeSingleQuoted(val) ?? _yamlEncodeDoubleQuoted(val);
       }
     }
 
@@ -238,24 +232,19 @@ String yamlEncodeBlockScalar(
 
     final val = value.value;
     if (val is String) {
-      if (_hasUnprintableCharacters(val)) {
-        return _yamlEncodeDoubleQuoted(val);
-      }
+      String? encoded;
 
-      if (value.style == ScalarStyle.SINGLE_QUOTED) {
-        return _tryYamlEncodeSingleQuoted(val);
-      }
-
-      // Strings with only white spaces will cause a misparsing
-      if (val.trim().length == val.length && val.isNotEmpty) {
-        if (value.style == ScalarStyle.FOLDED) {
-          return _tryYamlEncodeFolded(val, indentation, lineEnding);
-        }
-
-        if (value.style == ScalarStyle.LITERAL) {
-          return _tryYamlEncodeLiteral(val, indentation, lineEnding);
+      if (!_hasUnprintableCharacters(val)) {
+        if (value.style == ScalarStyle.SINGLE_QUOTED) {
+          encoded = _tryYamlEncodeSingleQuoted(val);
+        } else if (value.style == ScalarStyle.FOLDED) {
+          encoded = _tryYamlEncodeFolded(val, indentation, lineEnding);
+        } else if (value.style == ScalarStyle.LITERAL) {
+          encoded = _tryYamlEncodeLiteral(val, indentation, lineEnding);
         }
       }
+
+      if (encoded != null) return encoded;
     }
 
     return _tryYamlEncodePlain(value.value);
@@ -328,14 +317,20 @@ String yamlEncodeBlockString(
     if (value.isEmpty) return '${' ' * indentation}{}';
 
     return value.nodes.entries.map((entry) {
-      final safeKey = yamlEncodeFlowString(entry.key as YamlNode);
+      final MapEntry(:key, :value) = entry;
+
+      final safeKey = yamlEncodeFlowString(key as YamlNode);
       final formattedKey = ' ' * indentation + safeKey;
-      final formattedValue =
-          yamlEncodeBlockString(entry.value, newIndentation, lineEnding);
+
+      final formattedValue = yamlEncodeBlockString(
+        value,
+        newIndentation,
+        lineEnding,
+      );
 
       /// Empty collections are always encoded in flow-style, so new-line must
       /// be avoided
-      if (isCollection(entry.value) && !isEmpty(entry.value)) {
+      if (isCollection(value) && !isEmpty(value)) {
         return '$formattedKey:$lineEnding$formattedValue';
       }
 
