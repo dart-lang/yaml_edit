@@ -14,10 +14,11 @@ import 'utils.dart';
 /// an escape sequence, it can only be detected when in a double-quoted
 /// sequence. Plain strings may also be misinterpreted by the YAML parser (e.g.
 /// ' null').
-String _tryYamlEncodePlain(Object? value) {
+String? _tryYamlEncodePlain(Object? value) {
   if (value is YamlNode) {
     AssertionError(
-        'YamlNodes should not be passed directly into getSafeString!');
+      'YamlNodes should not be passed directly into getSafeString!',
+    );
   }
 
   assertValidScalar(value);
@@ -29,11 +30,7 @@ String _tryYamlEncodePlain(Object? value) {
     ///
     /// See 7.3.1 Double-Quoted Style
     /// https://yaml.org/spec/1.2/spec.html#id2787109
-    if (isDangerousString(value)) {
-      return _yamlEncodeDoubleQuoted(value);
-    }
-
-    return value;
+    return isDangerousString(value) ? null : value;
   }
 
   return value.toString();
@@ -112,9 +109,7 @@ String? _tryYamlEncodeSingleQuoted(String string) {
   // line breaks are ignored, we can't represent "\n ".
   // Thus, if the string contains `\n` and we're asked to do single quoted,
   // we'll fallback to a double quoted string.
-  // TODO: Consider if we should make '\n' an unprintedable, this might make
-  //       folded strings into double quoted -- some work is needed here.
-  if (string.contains('\n')) return null;
+  if (_hasUnprintableCharacters(string) || string.contains('\n')) return null;
 
   final result = string.replaceAll('\'', '\'\'');
   return '\'$result\'';
@@ -192,27 +187,31 @@ String? _tryYamlEncodeLiteral(
 /// parameter where possible. Certain cases make this impossible (e.g. a plain
 /// string scalar that starts with '>'), in which case we will produce [value]
 /// with default styling options.
-String _yamlEncodeFlowScalar(YamlNode value) {
-  if (value is YamlScalar) {
-    assertValidScalar(value.value);
-
-    final val = value.value;
-    if (val is String) {
-      if (_hasUnprintableCharacters(val) ||
-          value.style == ScalarStyle.DOUBLE_QUOTED) {
-        return _yamlEncodeDoubleQuoted(val);
-      }
-
-      if (value.style == ScalarStyle.SINGLE_QUOTED) {
-        return _tryYamlEncodeSingleQuoted(val) ?? _yamlEncodeDoubleQuoted(val);
-      }
-    }
-
-    return _tryYamlEncodePlain(value.value);
+String _yamlEncodeFlowScalar(YamlNode yamlNode) {
+  /// We can only encode a [YamlScalar]
+  if (yamlNode is! YamlScalar) {
+    AssertionError('Expected a YamlScalar but got ${yamlNode.runtimeType}');
   }
 
-  assertValidScalar(value);
-  return _tryYamlEncodePlain(value);
+  final YamlScalar(:value, :style) = yamlNode as YamlScalar;
+
+  final isString = value is String;
+
+  switch (style) {
+    /// Only encode as double-quoted if it's a string.
+    case ScalarStyle.DOUBLE_QUOTED when isString:
+      return _yamlEncodeDoubleQuoted(value);
+
+    case ScalarStyle.SINGLE_QUOTED when isString:
+      return _tryYamlEncodeSingleQuoted(value) ??
+          _yamlEncodeDoubleQuoted(value);
+
+    /// Cast into [String] if [null] as this condition only returns [null]
+    /// for a [String] that can't be encoded.
+    default:
+      return _tryYamlEncodePlain(value) ??
+          _yamlEncodeDoubleQuoted(value as String);
+  }
 }
 
 /// Returns [value] with the necessary formatting applied in a block context
@@ -223,38 +222,54 @@ String _yamlEncodeFlowScalar(YamlNode value) {
 /// string scalar 'null'), in which case we will produce [value] with default
 /// styling options.
 String yamlEncodeBlockScalar(
-  YamlNode value,
+  YamlNode yamlNode,
   int indentation,
   String lineEnding,
 ) {
-  if (value is YamlScalar) {
-    assertValidScalar(value.value);
-
-    final val = value.value;
-    if (val is String) {
-      String? encoded;
-
-      if (!_hasUnprintableCharacters(val)) {
-        if (value.style == ScalarStyle.SINGLE_QUOTED) {
-          encoded = _tryYamlEncodeSingleQuoted(val);
-        } else if (value.style == ScalarStyle.FOLDED) {
-          encoded = _tryYamlEncodeFolded(val, indentation, lineEnding);
-        } else if (value.style == ScalarStyle.LITERAL) {
-          encoded = _tryYamlEncodeLiteral(val, indentation, lineEnding);
-        }
-      }
-
-      if (encoded != null) return encoded;
-    }
-
-    return _tryYamlEncodePlain(value.value);
+  /// We can only encode a [YamlScalar]
+  if (yamlNode is! YamlScalar) {
+    AssertionError('Expected a YamlScalar but got ${yamlNode.runtimeType}');
   }
 
+  final YamlScalar(:value, :style) = yamlNode as YamlScalar;
   assertValidScalar(value);
 
-  /// The remainder of the possibilities are similar to how [getFlowScalar]
-  /// treats [value].
-  return _yamlEncodeFlowScalar(value);
+  final isString = value is String;
+
+  if (isString && _hasUnprintableCharacters(value)) {
+    return _yamlEncodeDoubleQuoted(value);
+  }
+
+  switch (style) {
+    /// Prefer 'plain', fallback to "double quoted". Cast into [String] if
+    /// null as this condition only returns [null] for a [String] that can't
+    /// be encoded.
+    case ScalarStyle.PLAIN:
+      return _tryYamlEncodePlain(value) ??
+          _yamlEncodeDoubleQuoted(value as String);
+
+    // Prefer 'single quoted', fallback to "double quoted"
+    case ScalarStyle.SINGLE_QUOTED when isString:
+      return _tryYamlEncodeSingleQuoted(value) ??
+          _yamlEncodeDoubleQuoted(value);
+
+    /// Prefer folded string, try literal as fallback
+    /// otherwise fallback to "double quoted"
+    case ScalarStyle.FOLDED when isString:
+      return _tryYamlEncodeFolded(value, indentation, lineEnding) ??
+          _yamlEncodeDoubleQuoted(value);
+
+    /// Prefer literal string, try folded as fallback
+    /// otherwise fallback to "double quoted"
+    case ScalarStyle.LITERAL when isString:
+      return _tryYamlEncodeLiteral(value, indentation, lineEnding) ??
+          _yamlEncodeDoubleQuoted(value);
+
+    /// Prefer plain, fallback to "double quoted"
+    default:
+      return _tryYamlEncodePlain(value) ??
+          _yamlEncodeDoubleQuoted(value as String);
+  }
 }
 
 /// Returns [value] with the necessary formatting applied in a flow context.
