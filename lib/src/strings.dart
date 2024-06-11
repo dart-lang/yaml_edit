@@ -100,12 +100,12 @@ String _yamlEncodeDoubleQuoted(String string) {
   return '"$buffer"';
 }
 
-/// Generates a YAML-safe single-quoted string. Automatically escapes
-/// single-quotes.
+/// Encodes [string] as YAML single quoted string.
 ///
-/// It is important that we ensure that [string] is free of unprintable
-/// characters by calling [_hasUnprintableCharacters] before invoking this
-/// function.
+/// Returns `null`, if the [string] can't be encoded as single-quoted string.
+/// This might happen if it contains line-breaks or [_hasUnprintableCharacters].
+///
+/// See: https://yaml.org/spec/1.2.2/#732-single-quoted-style
 String? _tryYamlEncodeSingleQuoted(String string) {
   // If [string] contains a newline we'll use double quoted strings instead.
   // Single quoted strings can represent newlines, but then we have to use an
@@ -119,11 +119,26 @@ String? _tryYamlEncodeSingleQuoted(String string) {
   return '\'$result\'';
 }
 
-/// Generates a YAML-safe folded string.
+/// Attempts to encode a [string] as a _YAML folded string_ and apply the
+/// appropriate _chomping indicator_.
 ///
-/// It is important that we ensure that [string] is free of unprintable
-/// characters by calling [_hasUnprintableCharacters] before invoking this
-/// function.
+/// Returns `null`, if the [string] cannot be encoded as a _YAML folded
+/// string_.
+///
+/// **Examples** of folded strings.
+/// ```yaml
+/// # With the "strip" chomping indicator
+/// key: >-
+///   my folded
+///   string
+///
+/// # With the "keep" chomping indicator
+/// key: >+
+///   my folded
+///   string
+/// ```
+///
+/// See: https://yaml.org/spec/1.2.2/#813-folded-style
 String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
   if (_shouldDoubleQuote(string)) return null;
 
@@ -167,11 +182,26 @@ String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
       '${stripped.replaceAll('\n', lineEnding + indent)}';
 }
 
-/// Generates a YAML-safe literal string.
+/// Attempts to encode a [string] as a _YAML literal string_ and apply the
+/// appropriate _chomping indicator_.
 ///
-/// It is important that we ensure that [string] is free of unprintable
-/// characters by calling [_hasUnprintableCharacters] before invoking this
-/// function.
+/// Returns `null`, if the [string] cannot be encoded as a _YAML literal
+/// string_.
+///
+/// **Examples** of literal strings.
+/// ```yaml
+/// # With the "strip" chomping indicator
+/// key: |-
+///   my literal
+///   string
+///
+/// # With the "keep" chomping indicator
+/// key: |+
+///   my literal
+///   string
+/// ```
+///
+/// See: https://yaml.org/spec/1.2.2/#812-literal-style
 String? _tryYamlEncodeLiteral(
     String string, int indentSize, String lineEnding) {
   if (_shouldDoubleQuote(string)) return null;
@@ -184,20 +214,13 @@ String? _tryYamlEncodeLiteral(
       '${string.replaceAll('\n', lineEnding + indent)}';
 }
 
-/// Returns [value] with the necessary formatting applied in a flow context
-/// if possible.
+///Encodes a flow [YamlScalar] based on the provided [YamlScalar.style].
 ///
-/// If [value] is a [YamlScalar], we try to respect its [YamlScalar.style]
-/// parameter where possible. Certain cases make this impossible (e.g. a plain
-/// string scalar that starts with '>'), in which case we will produce [value]
-/// with default styling options.
-String _yamlEncodeFlowScalar(YamlNode yamlNode) {
-  /// We can only encode a [YamlScalar]
-  if (yamlNode is! YamlScalar) {
-    AssertionError('Expected a YamlScalar but got ${yamlNode.runtimeType}');
-  }
-
-  final YamlScalar(:value, :style) = yamlNode as YamlScalar;
+/// Falls back to [ScalarStyle.DOUBLE_QUOTED] if the [yamlScalar] cannot be
+/// encoded with the [YamlScalar.style] or with [ScalarStyle.PLAIN] when the
+/// [yamlScalar] is not a [String].
+String _yamlEncodeFlowScalar(YamlScalar yamlScalar) {
+  final YamlScalar(:value, :style) = yamlScalar;
 
   final isString = value is String;
 
@@ -218,24 +241,16 @@ String _yamlEncodeFlowScalar(YamlNode yamlNode) {
   }
 }
 
-/// Returns [value] with the necessary formatting applied in a block context
-/// if possible.
+/// Encodes a block [YamlScalar] based on the provided [YamlScalar.style].
 ///
-/// If [value] is a [YamlScalar], we try to respect its [YamlScalar.style]
-/// parameter where possible. Certain cases make this impossible (e.g. a folded
-/// string scalar 'null'), in which case we will produce [value] with default
-/// styling options.
-String yamlEncodeBlockScalar(
-  YamlNode yamlNode,
+/// Falls back to [ScalarStyle.DOUBLE_QUOTED] if the [yamlScalar] cannot be
+/// encoded with the [YamlScalar.style] provided.
+String _yamlEncodeBlockScalar(
+  YamlScalar yamlScalar,
   int indentation,
   String lineEnding,
 ) {
-  /// We can only encode a [YamlScalar]
-  if (yamlNode is! YamlScalar) {
-    AssertionError('Expected a YamlScalar but got ${yamlNode.runtimeType}');
-  }
-
-  final YamlScalar(:value, :style) = yamlNode as YamlScalar;
+  final YamlScalar(:value, :style) = yamlScalar;
   assertValidScalar(value);
 
   final isString = value is String;
@@ -299,7 +314,7 @@ String yamlEncodeFlowString(YamlNode value) {
     return '{${safeEntries.join(', ')}}';
   }
 
-  return _yamlEncodeFlowScalar(value);
+  return _yamlEncodeFlowScalar(value as YamlScalar);
 }
 
 /// Returns [value] with the necessary formatting applied in a block context.
@@ -357,7 +372,11 @@ String yamlEncodeBlockString(
     }).join(lineEnding);
   }
 
-  return yamlEncodeBlockScalar(value, newIndentation, lineEnding);
+  return _yamlEncodeBlockScalar(
+    value as YamlScalar,
+    newIndentation,
+    lineEnding,
+  );
 }
 
 /// List of unprintable characters.
