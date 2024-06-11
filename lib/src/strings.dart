@@ -74,7 +74,11 @@ String _getChompingIndicator(String string) {
   ///
   /// Apply the `keep (+)` chomping indicator for trailing whitespace to be
   /// treated as content.
-  if (string.endsWith('\n ') || string.endsWith('\n')) return '+';
+  ///
+  /// [NOTE]: We only check for trailing whitespace rather than `\n `. This is
+  /// a coin-toss approach. If there is a new line after this, it will be kept.
+  /// If not, nothing happens.
+  if (string.endsWith(' ') || string.endsWith('\n')) return '+';
 
   return '-';
 }
