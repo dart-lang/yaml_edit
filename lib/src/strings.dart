@@ -112,10 +112,11 @@ String _getChompingIndicator(String string) {
 ///
 /// See: https://yaml.org/spec/1.2.2/#813-folded-style
 String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
-  if (_hasUnprintableCharacters(string)) return null;
   // A string that starts with space or newline followed by space can't be
   // encoded in folded mode.
-  if (string.startsWith(' ') && string.startsWith('\n ')) return null;
+  if (string.isEmpty || string.trimLeft().length != string.length) return null;
+
+  if (_hasUnprintableCharacters(string)) return null;
 
   // TODO: Are there other strings we can't encode in folded mode?
 
@@ -181,10 +182,11 @@ String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
 /// See: https://yaml.org/spec/1.2.2/#812-literal-style
 String? _tryYamlEncodeLiteral(
     String string, int indentSize, String lineEnding) {
-  if (_hasUnprintableCharacters(string)) return null;
+  if (string.isEmpty || string.trimLeft().length != string.length) return null;
+
   // A string that starts with space or newline followed by space can't be
   // encoded in literal mode.
-  if (string.startsWith(' ') && string.startsWith('\n ')) return null;
+  if (_hasUnprintableCharacters(string)) return null;
 
   // TODO: Are there other strings we can't encode in literal mode?
 
@@ -192,7 +194,7 @@ String? _tryYamlEncodeLiteral(
 
   /// Simplest block style.
   /// * https://yaml.org/spec/1.2.2/#812-literal-style
-  return '|${string.endsWith('\n') ? '' : '-'}\n$indent'
+  return '|${_getChompingIndicator(string)}\n$indent'
       '${string.replaceAll('\n', lineEnding + indent)}';
 }
 
