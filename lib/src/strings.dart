@@ -73,24 +73,6 @@ String? _tryYamlEncodeSingleQuoted(String string) {
   return '\'$result\'';
 }
 
-/// Returns the correct block chomping indicator for [ScalarStyle.FOLDED]
-/// and [ScalarStyle.LITERAL].
-///
-/// See https://yaml.org/spec/1.2.2/#8112-block-chomping-indicator
-String _getChompingIndicator(String string) {
-  /// By default, we apply an indent to the string after every new line.
-  ///
-  /// Apply the `keep (+)` chomping indicator for trailing whitespace to be
-  /// treated as content.
-  ///
-  /// [NOTE]: We only check for trailing whitespace rather than `\n `. This is
-  /// a coin-toss approach. If there is a new line after this, it will be kept.
-  /// If not, nothing happens.
-  if (string.endsWith(' ') || string.endsWith('\n')) return '+';
-
-  return '-';
-}
-
 /// Attempts to encode a [string] as a _YAML folded string_ and apply the
 /// appropriate _chomping indicator_.
 ///
@@ -155,7 +137,7 @@ String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
     return previous + lineEnding + updated;
   });
 
-  return '>${_getChompingIndicator(string)}\n'
+  return '>-\n'
       '$indent$trimmed'
       '${stripped.replaceAll('\n', lineEnding + indent)}';
 }
@@ -194,8 +176,7 @@ String? _tryYamlEncodeLiteral(
 
   /// Simplest block style.
   /// * https://yaml.org/spec/1.2.2/#812-literal-style
-  return '|${_getChompingIndicator(string)}\n$indent'
-      '${string.replaceAll('\n', lineEnding + indent)}';
+  return '|-\n$indent${string.replaceAll('\n', lineEnding + indent)}';
 }
 
 ///Encodes a flow [YamlScalar] based on the provided [YamlScalar.style].
@@ -243,9 +224,7 @@ String _yamlEncodeBlockScalar(
   }
 
   switch (style) {
-    /// Prefer 'plain', fallback to "double quoted". Cast into [String] if
-    /// null as this condition only returns [null] for a [String] that can't
-    /// be encoded.
+    /// Prefer 'plain', fallback to "double quoted"
     case ScalarStyle.PLAIN:
       return _tryYamlEncodePlain(value) ?? _yamlEncodeDoubleQuoted(value);
 
@@ -254,14 +233,12 @@ String _yamlEncodeBlockScalar(
       return _tryYamlEncodeSingleQuoted(value) ??
           _yamlEncodeDoubleQuoted(value);
 
-    /// Prefer folded string, try literal as fallback
-    /// otherwise fallback to "double quoted"
+    /// Prefer folded string, fallback to "double quoted"
     case ScalarStyle.FOLDED:
       return _tryYamlEncodeFolded(value, indentation, lineEnding) ??
           _yamlEncodeDoubleQuoted(value);
 
-    /// Prefer literal string, try folded as fallback
-    /// otherwise fallback to "double quoted"
+    /// Prefer literal string, fallback to "double quoted"
     case ScalarStyle.LITERAL:
       return _tryYamlEncodeLiteral(value, indentation, lineEnding) ??
           _yamlEncodeDoubleQuoted(value);

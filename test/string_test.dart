@@ -10,6 +10,7 @@ final _testStrings = [
   "this is a fairly' long string with\nline breaks",
   'whitespace\n after line breaks',
   'whitespace\n \nbetween line breaks',
+  '\n line break at the start',
   'word',
   'foo bar',
   'foo\nbar',
