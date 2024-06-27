@@ -179,7 +179,7 @@ String? _tryYamlEncodeLiteral(
   return '|-\n$indent${string.replaceAll('\n', lineEnding + indent)}';
 }
 
-///Encodes a flow [YamlScalar] based on the provided [YamlScalar.style].
+/// Encodes a flow [YamlScalar] based on the provided [YamlScalar.style].
 ///
 /// Falls back to [ScalarStyle.DOUBLE_QUOTED] if the [yamlScalar] cannot be
 /// encoded with the [YamlScalar.style] or with [ScalarStyle.PLAIN] when the
