@@ -273,6 +273,118 @@ String getLineEnding(String yaml) {
   return windowsNewlines > unixNewlines ? '\r\n' : '\n';
 }
 
+/// Extracts comments for a node that is replaced within a [YamlMap] or
+/// [YamlList] or a top-level [YamlScalar] of the [yaml] string provided.
+///
+/// [currentEndOffset] represents the end offset of [YamlScalar] or [YamlList]
+/// or [YamlMap] being replaced, that is, `end + 1`.
+///
+/// [nextStartOffset] represents the start offset of the next [YamlNode].
+/// May be null if the current [YamlNode] being replaced is the last node
+/// in a [YamlScalar] or [YamlList] or if its the only top-level [YamlScalar].
+/// If not sure of the next [YamlNode]'s [nextStartOffset] pass in null and
+/// allow this function to handle that manually.
+///
+/// Do note that this function has no context of the structure of the [yaml]
+/// but assumes the caller does and requires comments based on the offsets
+/// provided and thus, may be erroneus since it exclusively scans for `#`
+/// delimiter or extracts the comments between the [currentEndOffset] and
+/// [nextStartOffset] if both are provided.
+///
+/// Returns the `endOffset` of the last comment extracted that is `end + 1`
+/// and a `List<String> comments`. It is recommended (but not necessary) that
+/// the caller checks the `endOffset` is still within the bounds of the [yaml].
+(int endOffset, List<String> comments) skipAndExtractCommentsInBlock(
+  String yaml,
+  int currentEndOffset,
+  int? nextStartOffset, [
+  String lineEnding = '\n',
+]) {
+  /// If [nextStartOffset] is null, this may be the last element in a collection
+  /// and thus we have to check and extract comments manually.
+  ///
+  /// Also, the caller may not be sure where the next node starts.
+  if (nextStartOffset == null) {
+    final comments = <String>[];
+
+    /// Skips white-space while extracting comments.
+    ///
+    /// Returns [null] if the end of the [yaml] was encountered while
+    /// skipping any white-space. Otherwise, returns the [index] of the next
+    /// non-white-space character.
+    int? skipWhitespace(int index) {
+      var nextIndex = index;
+
+      while (true) {
+        if (nextIndex == yaml.length) return null;
+        if (yaml[nextIndex].trim().isNotEmpty) return nextIndex;
+        ++nextIndex;
+      }
+    }
+
+    var currentOffset = currentEndOffset;
+
+    externalLoop:
+    while (true) {
+      if (currentOffset == yaml.length) break;
+
+      var leadingChar = yaml[currentOffset].trim();
+      var indexOfCommentStart = -1;
+
+      if (leadingChar.isEmpty) {
+        switch (skipWhitespace(currentOffset)) {
+          case final int nextIndex:
+            currentOffset = nextIndex;
+            leadingChar = yaml[currentOffset];
+            break;
+
+          default:
+            currentOffset = yaml.length;
+            break externalLoop; // Exit loop entirely!
+        }
+      }
+
+      /// We need comments only, nothing else. This may be pointless but will
+      /// help us avoid extracting comments when provided random offsets
+      /// within a string.
+      if (leadingChar == '#') indexOfCommentStart = currentOffset;
+
+      /// This is a mindless assumption that the last character was either
+      /// `\n` or [white-space] or the last erroneus offset provided.
+      if (indexOfCommentStart == -1) break;
+
+      final indexOfLineBreak = yaml.indexOf(lineEnding, currentOffset);
+      final isEnd = indexOfLineBreak == -1;
+
+      final comment = yaml
+          .substring(indexOfCommentStart, isEnd ? null : indexOfLineBreak)
+          .trim();
+
+      if (comment.isNotEmpty) comments.add(comment);
+
+      if (isEnd) {
+        currentOffset += comment.length;
+        break;
+      }
+      currentOffset = indexOfLineBreak + 1; // Skip line-break eagerly
+    }
+
+    return (currentOffset, comments);
+  }
+
+  return (
+    nextStartOffset,
+    yaml.substring(currentEndOffset, nextStartOffset).split(lineEnding).fold(
+      <String>[],
+      (buffer, current) {
+        final comment = current.trim();
+        if (comment.isNotEmpty) buffer.add(comment);
+        return buffer;
+      },
+    )
+  );
+}
+
 extension YamlNodeExtension on YamlNode {
   /// Returns the [CollectionStyle] of `this` if `this` is [YamlMap] or
   /// [YamlList].
