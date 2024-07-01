@@ -385,6 +385,84 @@ String getLineEnding(String yaml) {
   );
 }
 
+/// Normalizes an encoded [YamlNode] encoded as a string by pruning any
+/// dangling line-breaks.
+///
+/// This function checks the last `YamlNode` of the [update] that is a
+/// `YamlScalar` and removes any unwanted line-break within the
+/// [updateAsString].
+///
+/// This is achieved by obtaining the chunk of the [yaml] that is after the
+/// current node being replaced using its [nodeToReplaceEndOffset]. If:
+///   1. The chunk has any trailing line-break then the it is left untouched.
+///   2. The node being replaced with [update] is not the last node, then it
+///      is left untouched.
+///   3. The terminal node in [update] is a `YamlScalar`, that is,
+///      the last [YamlNode] within the [update] that is not a collection.
+String normalizeEncodedBlock(
+  String yaml,
+  String lineEnding,
+  int nodeToReplaceEndOffset,
+  YamlNode update,
+  String updateAsString,
+) {
+  var terminalNode = update;
+
+  if (terminalNode is! YamlScalar) {
+    loop:
+    while (terminalNode is! YamlScalar) {
+      switch (terminalNode) {
+        case YamlList list:
+          {
+            if (list.isEmpty) {
+              terminalNode = list;
+              break loop;
+            }
+
+            terminalNode = list.nodes.last;
+          }
+
+        case YamlMap map:
+          {
+            if (map.isEmpty) {
+              terminalNode = map;
+              break loop;
+            }
+
+            terminalNode = map.nodes.entries.last.value;
+          }
+      }
+    }
+  }
+
+  /// The node may end up being an empty [YamlMap] or [YamlList] or
+  /// [YamlScalar]. We never normalize a literal/folded string irrespective of
+  /// its position
+  if (terminalNode case YamlScalar(style: var style)
+      when style == ScalarStyle.LITERAL || style == ScalarStyle.FOLDED) {
+    return updateAsString;
+  }
+
+  var normalizedString = updateAsString;
+
+  /// We need to be methodical as we only want to strip it if at the end of the
+  /// yaml. If not at the end, this `\n` acts as a line break.
+  final trailing = yaml.substring(nodeToReplaceEndOffset);
+
+  /// We trim it since `package: yaml` only includes an offset with meaningful
+  /// content. A further check for the trailing `\n` ensures we respect its
+  /// initial state.
+  if (trailing.trimRight().isEmpty && !trailing.endsWith(lineEnding)) {
+    final size = lineEnding == '\r\n' ? 2 : 1;
+    normalizedString = updateAsString.substring(
+      0,
+      updateAsString.length - size,
+    );
+  }
+
+  return normalizedString;
+}
+
 extension YamlNodeExtension on YamlNode {
   /// Returns the [CollectionStyle] of `this` if `this` is [YamlMap] or
   /// [YamlList].
