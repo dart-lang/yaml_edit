@@ -29,18 +29,21 @@ SourceEdit updateInList(
     final listIndentation = getListIndentation(yaml, list);
     final indentation = listIndentation + getIndentation(yamlEdit);
     final lineEnding = getLineEnding(yaml);
-    valueString =
-        yamlEncodeBlock(wrapAsYamlNode(newValue), indentation, lineEnding);
+
+    final encoded = yamlEncodeBlock(
+      wrapAsYamlNode(newValue),
+      indentation,
+      lineEnding,
+    );
+    valueString = encoded;
 
     /// We prefer the compact nested notation for collections.
     ///
-    /// By virtue of [yamlEncodeBlockString], collections automatically
+    /// By virtue of [yamlEncodeBlock], collections automatically
     /// have the necessary line endings.
     if ((newValue is List && (newValue as List).isNotEmpty) ||
         (newValue is Map && (newValue as Map).isNotEmpty)) {
       valueString = valueString.substring(indentation);
-    } else if (currValue.collectionStyle == CollectionStyle.BLOCK) {
-      valueString += lineEnding;
     }
 
     var end = getContentSensitiveEnd(currValue);
@@ -49,6 +52,19 @@ SourceEdit updateInList(
       end = offset;
       valueString = ' $valueString';
     }
+
+    // Aggressively skip all comments
+    final (offsetOfLastComment, _) =
+        skipAndExtractCommentsInBlock(yaml, end, null, lineEnding);
+    end = offsetOfLastComment;
+    
+    valueString =
+        normalizeEncodedBlock(yaml, lineEnding, end, newValue, valueString);
+
+    /// [skipAndExtractCommentsInBlock] is greedy and eats up any whitespace
+    /// it encounters in search of comments. Compensate indent lost in the
+    /// current edit
+    if (index != list.length - 1) valueString += ' ' * listIndentation;
 
     return SourceEdit(offset, end - offset, valueString);
   } else {
@@ -146,7 +162,7 @@ SourceEdit _appendToBlockList(
     valueString = valueString.substring(newIndentation);
   }
 
-  return (listIndentation, '- $valueString$lineEnding');
+  return (listIndentation, '- $valueString');
 }
 
 /// Formats [item] into a new node for flow lists.
