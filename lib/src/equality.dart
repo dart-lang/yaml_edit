@@ -87,8 +87,10 @@ int deepHashCode(Object? value) {
 }
 
 /// Returns the [YamlNode] corresponding to the provided [key].
-YamlNode getKeyNode(YamlMap map, Object? key) {
-  return map.nodes.keys.firstWhere((node) => deepEquals(node, key)) as YamlNode;
+(int index, YamlNode keyNode) getKeyNode(YamlMap map, Object? key) {
+  return map.nodes.keys.indexed.firstWhere(
+    (value) => deepEquals(value.$2, key),
+  ) as (int, YamlNode);
 }
 
 /// Returns the [YamlNode] after the [YamlNode] corresponding to the provided
