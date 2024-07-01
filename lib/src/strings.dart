@@ -106,7 +106,7 @@ String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
 
   /// Remove trailing `\n` & white-space to ease string folding
   var trimmed = string.trimRight();
-  final stripped = string.substring(trimmed.length);
+  var stripped = string.substring(trimmed.length);
 
   final trimmedSplit =
       trimmed.replaceAll('\n', lineEnding + indent).split(lineEnding);
@@ -137,9 +137,30 @@ String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
     return previous + lineEnding + updated;
   });
 
-  return '>-\n'
+  stripped = stripped.replaceAll('\n', lineEnding); // Mild paranoia
+  final ignoreTrailingLineBreak = stripped.endsWith(lineEnding);
+
+  // We ignore it with conviction as explained below.
+  if (ignoreTrailingLineBreak) {
+    stripped = stripped.substring(0, stripped.length - 1);
+  }
+
+  /// If indeed we have a trailing line, we apply a `chomping hack`. We use a
+  /// `clip indicator` (no chomping indicator) if we need to ignore the `\n`
+  /// and `strip indicator` if not to remove any trailing indents.
+  ///
+  /// The caller of this method, that is, [yamlEncodeBlock] will apply a
+  /// dangling `\n` that will\should be normalized by
+  /// [normalizeEncodedBlock] which allows trailing `\n` for [folded]
+  /// strings such that:
+  ///  * If we had a string `"my string \n"`:
+  ///     1. This function excludes it and it becomes `>\n<indent>my string `
+  ///     2. [yamlEncodeBlock] applies `\n` that we skipped.
+  ///     2. [normalizeEncodedBlock] ignores the trailing `\n` for folded
+  ///        string by default.
+  return '>${ignoreTrailingLineBreak ? '' : '-'}\n'
       '$indent$trimmed'
-      '${stripped.replaceAll('\n', lineEnding + indent)}';
+      '${stripped.replaceAll(lineEnding, lineEnding + indent)}';
 }
 
 /// Attempts to encode a [string] as a _YAML literal string_ and apply the
@@ -170,13 +191,41 @@ String? _tryYamlEncodeLiteral(
   // encoded in literal mode.
   if (_hasUnprintableCharacters(string)) return null;
 
-  // TODO: Are there other strings we can't encode in literal mode?
-
   final indent = ' ' * indentSize;
 
-  /// Simplest block style.
-  /// * https://yaml.org/spec/1.2.2/#812-literal-style
-  return '|-\n$indent${string.replaceAll('\n', lineEnding + indent)}';
+  // TODO: Are there other strings we can't encode in literal mode?
+  final trimmed = string.trimRight();
+
+  // Mild paranoia
+  var stripped = string
+      .substring(
+        trimmed.length,
+      )
+      .replaceAll('\n', lineEnding);
+
+  final ignoreTrailingLineBreak = stripped.endsWith(lineEnding);
+
+  // We ignore it with conviction as explained below.
+  if (ignoreTrailingLineBreak) {
+    stripped = stripped.substring(0, stripped.length - 1);
+  }
+
+  /// If indeed we have a trailing line, we apply a `chomping hack`. We use a
+  /// `clip indicator` (no chomping indicator) if we need to ignore the `\n`
+  /// and `strip indicator` if not to remove any trailing indents.
+  ///
+  /// The caller of this method, that is, [yamlEncodeBlock] will apply a
+  /// dangling `\n` that will\should be normalized by
+  /// [normalizeEncodedBlock] which allows trailing `\n` for [literal]
+  /// strings such that:
+  ///  * If we had a string `"my string \n"`:
+  ///     1. This function excludes it and it becomes `|\n<indent>my string `
+  ///     2. [yamlEncodeBlock] applies `\n` that we skipped.
+  ///     2. [normalizeEncodedBlock] ignores the trailing `\n` for literal
+  ///        string by default.
+  return '|${ignoreTrailingLineBreak ? '' : '-'}\n'
+      '$indent${trimmed.replaceAll('\n', lineEnding + indent)}'
+      '${stripped.replaceAll(lineEnding, lineEnding + indent)}';
 }
 
 /// Encodes a flow [YamlScalar] based on the provided [YamlScalar.style].
@@ -280,13 +329,8 @@ String yamlEncodeFlow(YamlNode value) {
 /// It is recommended that callers of this method also make a call to
 /// [normalizeEncodedBlock] with this [value] as the `update` and output
 /// of this call as the `updateAsString` to prune any dangling line-break.
-String yamlEncodeBlock(
-  YamlNode value,
-  int indentation,
-  String lineEnding,
-) {
-  return _encodeBlockRecursively(value, indentation, lineEnding).$2;
-}
+String yamlEncodeBlock(YamlNode value, int indentation, String lineEnding) =>
+    _encodeBlockRecursively(value, indentation, lineEnding).$2;
 
 (bool addedLineBreak, String value) _encodeBlockRecursively(
   YamlNode value,
