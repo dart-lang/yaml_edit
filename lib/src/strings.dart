@@ -329,63 +329,43 @@ String yamlEncodeFlow(YamlNode value) {
 /// It is recommended that callers of this method also make a call to
 /// [normalizeEncodedBlock] with this [value] as the `update` and output
 /// of this call as the `updateAsString` to prune any dangling line-break.
-String yamlEncodeBlock(YamlNode value, int indentation, String lineEnding) =>
-    _encodeBlockRecursively(value, indentation, lineEnding).$2;
-
-(bool addedLineBreak, String value) _encodeBlockRecursively(
-  YamlNode value,
-  int indentation,
-  String lineEnding,
-) {
+String yamlEncodeBlock(YamlNode value, int indentation, String lineEnding) {
   const additionalIndentation = 2;
 
-  if (!isBlockNode(value)) return (true, yamlEncodeFlow(value) + lineEnding);
+  if (!isBlockNode(value)) return yamlEncodeFlow(value) + lineEnding;
 
   final newIndentation = indentation + additionalIndentation;
 
   if (value is YamlList) {
-    if (value.isEmpty) return (true, '${' ' * indentation}[]$lineEnding');
+    if (value.isEmpty) return '${' ' * indentation}[]$lineEnding';
 
-    final encodedList = value.nodes.fold('', (string, element) {
-      var (addedLineBreak, valueString) = _encodeBlockRecursively(
-        element,
-        newIndentation,
-        lineEnding,
-      );
+    return value.nodes.fold('', (string, element) {
+      var valueString = yamlEncodeBlock(element, newIndentation, lineEnding);
 
       if (isCollection(element) && !isFlowYamlCollectionNode(element)) {
         valueString = valueString.substring(newIndentation);
       }
 
-      final appended = '$string${' ' * indentation}- $valueString';
-      return addedLineBreak ? appended : '$appended$lineEnding';
+      return '$string${' ' * indentation}- $valueString';
     });
-
-    return (true, encodedList);
   } else if (value is YamlMap) {
-    if (value.isEmpty) return (true, '${' ' * indentation}{}$lineEnding');
+    if (value.isEmpty) return '${' ' * indentation}{}$lineEnding';
 
-    final encodedMap = value.nodes.entries.fold('', (string, entry) {
+    return value.nodes.entries.fold('', (string, entry) {
       final MapEntry(:key, :value) = entry;
 
       final safeKey = yamlEncodeFlow(key as YamlNode);
       var formattedKey = ' ' * indentation + safeKey;
 
-      final (addedLineBreak, formattedValue) = _encodeBlockRecursively(
-        value,
-        newIndentation,
-        lineEnding,
-      );
+      final formattedValue = yamlEncodeBlock(value, newIndentation, lineEnding);
 
       /// Empty collections are always encoded in flow-style, so new-line must
       /// be avoided. Otherwise, begin the collection on a new line.
       formattedKey = '$formattedKey:'
           '${isCollection(value) && !isEmpty(value) ? lineEnding : " "}';
 
-      final appended = '$string$formattedKey$formattedValue';
-      return addedLineBreak ? appended : '$appended$lineEnding';
+      return '$string$formattedKey$formattedValue';
     });
-    return (true, encodedMap);
   }
 
   final encodedScalar = _yamlEncodeBlockScalar(
@@ -394,7 +374,7 @@ String yamlEncodeBlock(YamlNode value, int indentation, String lineEnding) =>
     lineEnding,
   );
 
-  return (true, encodedScalar + lineEnding);
+  return encodedScalar + lineEnding;
 }
 
 /// List of unprintable characters.
