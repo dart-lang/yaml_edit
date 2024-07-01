@@ -57,7 +57,7 @@ SourceEdit updateInList(
     final (offsetOfLastComment, _) =
         skipAndExtractCommentsInBlock(yaml, end, null, lineEnding);
     end = offsetOfLastComment;
-    
+
     valueString =
         normalizeEncodedBlock(yaml, lineEnding, end, newValue, valueString);
 
