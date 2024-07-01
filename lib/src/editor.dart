@@ -243,9 +243,10 @@ class YamlEditor {
       final start = _contents.span.start.offset;
       final end = getContentSensitiveEnd(_contents);
       final lineEnding = getLineEnding(_yaml);
-      final edit = SourceEdit(
-          start, end - start, yamlEncodeBlock(valueNode, 0, lineEnding));
-
+      var encoded = yamlEncodeBlock(valueNode, 0, lineEnding);
+      encoded =
+          normalizeEncodedBlock(_yaml, lineEnding, end, valueNode, encoded);
+      final edit = SourceEdit(start, end - start, encoded);
       return _performEdit(edit, path, valueNode);
     }
 
@@ -483,7 +484,7 @@ class YamlEditor {
         if (!containsKey(map, keyOrIndex)) {
           return _pathErrorOrElse(path, path.take(i + 1), map, orElse);
         }
-        final keyNode = getKeyNode(map, keyOrIndex);
+        final (_, keyNode) = getKeyNode(map, keyOrIndex);
 
         if (checkAlias) {
           if (_aliases.contains(keyNode)) throw AliasException(path, keyNode);

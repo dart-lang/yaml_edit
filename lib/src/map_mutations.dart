@@ -36,7 +36,7 @@ SourceEdit updateInMap(
 /// removing the element at [key] when re-parsed.
 SourceEdit removeInMap(YamlEditor yamlEdit, YamlMap map, Object? key) {
   assert(containsKey(map, key));
-  final keyNode = getKeyNode(map, key);
+  final (_, keyNode) = getKeyNode(map, key);
   final valueNode = map.nodes[keyNode]!;
 
   if (map.style == CollectionStyle.FLOW) {
@@ -83,13 +83,14 @@ SourceEdit _addToBlockMap(
     }
   }
 
-  var valueString = yamlEncodeBlock(newValue, newIndentation, lineEnding);
+  final valueString = yamlEncodeBlock(newValue, newIndentation, lineEnding);
+
   if (isCollection(newValue) &&
       !isFlowYamlCollectionNode(newValue) &&
       !isEmpty(newValue)) {
-    formattedValue += '$keyString:$lineEnding$valueString$lineEnding';
+    formattedValue += '$keyString:$lineEnding$valueString';
   } else {
-    formattedValue += '$keyString: $valueString$lineEnding';
+    formattedValue += '$keyString: $valueString';
   }
 
   return SourceEdit(offset, 0, formattedValue);
@@ -127,12 +128,18 @@ SourceEdit _replaceInBlockMap(
     YamlEditor yamlEdit, YamlMap map, Object? key, YamlNode newValue) {
   final yaml = yamlEdit.toString();
   final lineEnding = getLineEnding(yaml);
-  final newIndentation =
-      getMapIndentation(yaml, map) + getIndentation(yamlEdit);
+  final mapIndentation = getMapIndentation(yaml, map);
+  final newIndentation = mapIndentation + getIndentation(yamlEdit);
 
-  final keyNode = getKeyNode(map, key);
-  var valueAsString =
-      yamlEncodeBlock(wrapAsYamlNode(newValue), newIndentation, lineEnding);
+  // TODO: Compensate for the indent eaten up
+  final (keyIndex, keyNode) = getKeyNode(map, key);
+
+  var valueAsString = yamlEncodeBlock(
+    wrapAsYamlNode(newValue),
+    newIndentation,
+    lineEnding,
+  );
+
   if (isCollection(newValue) &&
       !isFlowYamlCollectionNode(newValue) &&
       !isEmpty(newValue)) {
@@ -150,9 +157,43 @@ SourceEdit _replaceInBlockMap(
   var end = getContentSensitiveEnd(map.nodes[key]!);
 
   /// `package:yaml` parses empty nodes in a way where the start/end of the
-  /// empty value node is the end of the key node, so we have to adjust for
-  /// this.
-  if (end < start) end = start;
+  /// empty value node is the end of the key node.
+  ///
+  /// In our case, we need to ensure that any line-breaks are included in the
+  /// edit such that:
+  ///   1. We account for `\n` after a key within other keys or at the start
+  ///       Example..
+  ///             a:
+  ///             b: value
+  ///
+  ///       or..
+  ///             a: value
+  ///             b:
+  ///             c: value
+  ///
+  ///   2. We don't suggest edits that are not within the string bounds because
+  ///      of the `\n` we need to account for in Rule 1 above. This could be a
+  ///      key:
+  ///         * At the index `0` but it's the only key
+  ///         * At the end in a map with more than one key
+  end = start == yaml.length
+      ? start
+      : end < start
+          ? start + 1
+          : end;
+
+  // Aggressively skip all comments
+  final (offsetOfLastComment, _) =
+      skipAndExtractCommentsInBlock(yaml, end, null, lineEnding);
+  end = offsetOfLastComment;
+
+  valueAsString =
+      normalizeEncodedBlock(yaml, lineEnding, end, newValue, valueAsString);
+
+  /// [skipAndExtractCommentsInBlock] is greedy and eats up any whitespace
+  /// it encounters in search of comments. Compensate indent lost in the
+  /// current edit
+  if (keyIndex != map.length - 1) valueAsString += ' ' * mapIndentation;
 
   return SourceEdit(start, end - start, valueAsString);
 }
