@@ -312,36 +312,54 @@ String getLineEnding(String yaml) {
     /// Returns [null] if the end of the [yaml] was encountered while
     /// skipping any white-space. Otherwise, returns the [index] of the next
     /// non-white-space character.
-    int? skipWhitespace(int index) {
-      var nextIndex = index;
+    (int? firstLineBreakOffset, int? nextIndex) skipWhitespace(int index) {
+      int? firstLineBreak;
+      int? nextIndex = index;
 
       while (true) {
-        if (nextIndex == yaml.length) return null;
-        if (yaml[nextIndex].trim().isNotEmpty) return nextIndex;
+        if (nextIndex == yaml.length) {
+          nextIndex = null;
+          break;
+        }
+
+        final char = yaml[nextIndex!];
+
+        if (char == lineEnding && firstLineBreak == null) {
+          firstLineBreak = nextIndex;
+        }
+
+        if (char.trim().isNotEmpty) break;
         ++nextIndex;
       }
+
+      if (firstLineBreak != null) firstLineBreak += 1; // Skip it if not null
+      return (firstLineBreak, nextIndex);
     }
 
     var currentOffset = currentEndOffset;
 
-    externalLoop:
     while (true) {
       if (currentOffset == yaml.length) break;
 
       var leadingChar = yaml[currentOffset].trim();
       var indexOfCommentStart = -1;
 
-      if (leadingChar.isEmpty) {
-        switch (skipWhitespace(currentOffset)) {
-          case final int nextIndex:
-            currentOffset = nextIndex;
-            leadingChar = yaml[currentOffset];
-            break;
+      int? firstLineBreak;
 
-          default:
-            currentOffset = yaml.length;
-            break externalLoop; // Exit loop entirely!
+      if (leadingChar.isEmpty) {
+        final (firstLE, nextIndex) = skipWhitespace(currentEndOffset);
+
+        /// If the next index is null, it means we reached the end of the
+        /// string. Since we lazily evaluated the string, attempt to return the
+        /// first [lineEnding] we encountered only if not null.
+        if (nextIndex == null) {
+          currentOffset = firstLE ?? yaml.length;
+          break;
         }
+
+        firstLineBreak = firstLE;
+        currentOffset = nextIndex;
+        leadingChar = yaml[currentOffset];
       }
 
       /// We need comments only, nothing else. This may be pointless but will
@@ -351,7 +369,13 @@ String getLineEnding(String yaml) {
 
       /// This is a mindless assumption that the last character was either
       /// `\n` or [white-space] or the last erroneus offset provided.
-      if (indexOfCommentStart == -1) break;
+      ///
+      /// Since we lazily evaluated the string, attempt to return the
+      /// first [lineEnding] we encountered only if not null.
+      if (indexOfCommentStart == -1) {
+        currentOffset = firstLineBreak ?? currentOffset;
+        break;
+      }
 
       final indexOfLineBreak = yaml.indexOf(lineEnding, currentOffset);
       final isEnd = indexOfLineBreak == -1;
