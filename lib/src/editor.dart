@@ -241,8 +241,9 @@ class YamlEditor {
 
     if (path.isEmpty) {
       final start = _contents.span.start.offset;
-      final end = getContentSensitiveEnd(_contents);
+      var end = getContentSensitiveEnd(_contents);
       final lineEnding = getLineEnding(_yaml);
+      end = skipAndExtractCommentsInBlock(_yaml, end, null, lineEnding).$1;
       var encoded = yamlEncodeBlock(valueNode, 0, lineEnding);
       encoded =
           normalizeEncodedBlock(_yaml, lineEnding, end, valueNode, encoded);
