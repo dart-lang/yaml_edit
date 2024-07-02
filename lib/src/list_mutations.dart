@@ -58,13 +58,13 @@ SourceEdit updateInList(
         skipAndExtractCommentsInBlock(yaml, end, null, lineEnding);
     end = offsetOfLastComment;
 
-    valueString =
-        normalizeEncodedBlock(yaml, lineEnding, end, newValue, valueString);
-
-    /// [skipAndExtractCommentsInBlock] is greedy and eats up any whitespace
-    /// it encounters in search of comments. Compensate indent lost in the
-    /// current edit
-    if (index != list.length - 1) valueString += ' ' * listIndentation;
+    valueString = normalizeEncodedBlock(
+      yaml,
+      lineEnding: lineEnding,
+      nodeToReplaceEndOffset: end,
+      update: newValue,
+      updateAsString: valueString,
+    );
 
     return SourceEdit(offset, end - offset, valueString);
   } else {

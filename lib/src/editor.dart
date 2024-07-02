@@ -245,8 +245,15 @@ class YamlEditor {
       final lineEnding = getLineEnding(_yaml);
       end = skipAndExtractCommentsInBlock(_yaml, end, null, lineEnding).$1;
       var encoded = yamlEncodeBlock(valueNode, 0, lineEnding);
-      encoded =
-          normalizeEncodedBlock(_yaml, lineEnding, end, valueNode, encoded);
+      encoded = normalizeEncodedBlock(
+        _yaml,
+        lineEnding: lineEnding,
+        nodeToReplaceEndOffset: end,
+        update: valueNode,
+        updateAsString: encoded,
+        skipPreservationCheck: true,
+        isTopLevelScalar: true,
+      );
       final edit = SourceEdit(start, end - start, encoded);
       return _performEdit(edit, path, valueNode);
     }

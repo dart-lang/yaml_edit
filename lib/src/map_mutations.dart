@@ -131,8 +131,7 @@ SourceEdit _replaceInBlockMap(
   final mapIndentation = getMapIndentation(yaml, map);
   final newIndentation = mapIndentation + getIndentation(yamlEdit);
 
-  // TODO: Compensate for the indent eaten up
-  final (keyIndex, keyNode) = getKeyNode(map, key);
+  final (_, keyNode) = getKeyNode(map, key);
 
   var valueAsString = yamlEncodeBlock(
     wrapAsYamlNode(newValue),
@@ -187,13 +186,13 @@ SourceEdit _replaceInBlockMap(
       skipAndExtractCommentsInBlock(yaml, end, null, lineEnding);
   end = offsetOfLastComment;
 
-  valueAsString =
-      normalizeEncodedBlock(yaml, lineEnding, end, newValue, valueAsString);
-
-  /// [skipAndExtractCommentsInBlock] is greedy and eats up any whitespace
-  /// it encounters in search of comments. Compensate indent lost in the
-  /// current edit
-  if (keyIndex != map.length - 1) valueAsString += ' ' * mapIndentation;
+  valueAsString = normalizeEncodedBlock(
+    yaml,
+    lineEnding: lineEnding,
+    nodeToReplaceEndOffset: end,
+    update: newValue,
+    updateAsString: valueAsString,
+  );
 
   return SourceEdit(start, end - start, valueAsString);
 }
