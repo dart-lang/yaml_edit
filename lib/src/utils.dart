@@ -416,16 +416,15 @@ String getLineEnding(String yaml) {
 /// `YamlScalar` and removes any dangling line-break within the
 /// [updateAsString].
 ///
-/// [skipPreservationCheck] and [isTopLevelScalar] should always remain false
-/// if updating a value within a [YamlList] or [YamlMap] that isn't an
-/// existing top-level [YamlNode].
+/// Line breaks are allowed if a:
+///   1. [YamlScalar] has [ScalarStyle.LITERAL] or [ScalarStyle.FOLDED]
+///   2. [YamlScalar] has [ScalarStyle.PLAIN] or [ScalarStyle.ANY] and its
+///      raw value is a [String] with a trailing line break.
+///   3. [YamlNode] being replaced has a line break.
 ///
-/// [isTopLevelScalar] ensures this function doesn't prune raw line breaks
-/// present in strings encoded with [ScalarStyle.PLAIN] or [ScalarStyle.ANY].
-///
-/// [skipPreservationCheck] ensures this function prunes any dangling line
-/// breaks that fail the [isTopLevelScalar] check and don't need to be included
-/// the top-level [YamlScalar] or [YamlList] or [YamlMap].
+/// [skipPreservationCheck] should always remain false if updating a value
+/// within a [YamlList] or [YamlMap] that isn't an existing top-level
+/// [YamlNode].
 String normalizeEncodedBlock(
   String yaml, {
   required String lineEnding,
@@ -433,9 +432,27 @@ String normalizeEncodedBlock(
   required YamlNode update,
   required String updateAsString,
   bool skipPreservationCheck = false,
-  bool isTopLevelScalar = false,
 }) {
   var terminalNode = update;
+
+  /// Checks if the dangling line break should be allowed within the deepest
+  /// [YamlNode] that is a [YamlScalar].
+  bool allowInYamlScalar(ScalarStyle style, dynamic value) {
+    /// We never normalize a literal/folded string irrespective of
+    /// its position.  We allow the block indicators to define how line break
+    /// will be treated
+    if (style == ScalarStyle.LITERAL || style == ScalarStyle.FOLDED) {
+      return true;
+    }
+
+    // Allow trailing line break if the raw value has a explicit line break.
+    if (style == ScalarStyle.PLAIN || style == ScalarStyle.ANY) {
+      return value is String &&
+          (value.endsWith('\n') || value.endsWith('\r\n'));
+    }
+
+    return false;
+  }
 
   loop:
   while (terminalNode is! YamlScalar) {
@@ -463,18 +480,10 @@ String normalizeEncodedBlock(
   }
 
   /// The node may end up being an empty [YamlMap] or [YamlList] or
-  /// [YamlScalar]. We never normalize a literal/folded string irrespective of
-  /// its position. Also, in case our value ended with a raw line-break for
-  /// a top level scalar
-  if (terminalNode case YamlScalar(style: var style, value: var value)) {
-    //
-    if (style == ScalarStyle.LITERAL ||
-        style == ScalarStyle.FOLDED ||
-        (isTopLevelScalar &&
-            value is String &&
-            (value.endsWith('\n') || value.endsWith('\r\n')))) {
-      return updateAsString;
-    }
+  /// [YamlScalar].
+  if (terminalNode case YamlScalar(style: var style, value: var value)
+      when allowInYamlScalar(style, value)) {
+    return updateAsString;
   }
 
   if (yaml.isNotEmpty && !skipPreservationCheck) {

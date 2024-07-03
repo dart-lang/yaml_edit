@@ -252,7 +252,6 @@ class YamlEditor {
         update: valueNode,
         updateAsString: encoded,
         skipPreservationCheck: true,
-        isTopLevelScalar: true,
       );
       final edit = SourceEdit(start, end - start, encoded);
       return _performEdit(edit, path, valueNode);
