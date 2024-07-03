@@ -55,7 +55,7 @@ SourceEdit updateInList(
 
     // Aggressively skip all comments
     final (offsetOfLastComment, _) =
-        skipAndExtractCommentsInBlock(yaml, end, null, lineEnding);
+        skipAndExtractCommentsInBlock(yaml, end, null, lineEnding: lineEnding);
     end = offsetOfLastComment;
 
     valueString = normalizeEncodedBlock(
@@ -128,22 +128,42 @@ SourceEdit _appendToFlowList(
 /// block list.
 SourceEdit _appendToBlockList(
     YamlEditor yamlEdit, YamlList list, YamlNode item) {
-  var (indentSize, valueToIndent) = _formatNewBlock(yamlEdit, list, item);
-  var formattedValue = '${' ' * indentSize}$valueToIndent';
+  /// A block list can never be empty since a `-` must be seen for it to be a
+  /// valid block sequence.
+  ///
+  /// See description of:
+  /// https://yaml.org/spec/1.2.2/#82-block-collection-styles.
+  assert(
+    list.isNotEmpty,
+    'A YamlList encoded as CollectionStyle.BLOCK must have a value',
+  );
 
   final yaml = yamlEdit.toString();
-  var offset = list.span.end.offset;
+  final lineEnding = getLineEnding(yaml);
 
-  // Adjusts offset to after the trailing newline of the last entry, if it
-  // exists
-  if (list.isNotEmpty) {
-    final lastValueSpanEnd = list.nodes.last.span.end.offset;
-    final nextNewLineIndex = yaml.indexOf('\n', lastValueSpanEnd - 1);
-    if (nextNewLineIndex == -1) {
-      formattedValue = getLineEnding(yaml) + formattedValue;
-    } else {
-      offset = nextNewLineIndex + 1;
-    }
+  // Lazily skip all comments and white-space at the end.
+  final (offset, _) = skipAndExtractCommentsInBlock(
+    yaml,
+    list.nodes.last.span.end.offset,
+    null,
+    lineEnding: lineEnding,
+  );
+
+  var (indentSize, formattedValue) = _formatNewBlock(yamlEdit, list, item);
+
+  formattedValue = normalizeEncodedBlock(
+    yaml,
+    lineEnding: lineEnding,
+    nodeToReplaceEndOffset: offset,
+    update: item,
+    updateAsString: formattedValue,
+  );
+
+  formattedValue = '${' ' * indentSize}$formattedValue';
+
+  // Apply line ending incase it's missing
+  if (yaml[offset - 1] != '\n') {
+    formattedValue = '$lineEnding$formattedValue';
   }
 
   return SourceEdit(offset, 0, formattedValue);
