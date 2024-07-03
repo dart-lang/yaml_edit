@@ -183,7 +183,7 @@ SourceEdit _replaceInBlockMap(
 
   // Aggressively skip all comments
   final (offsetOfLastComment, _) =
-      skipAndExtractCommentsInBlock(yaml, end, null, lineEnding);
+      skipAndExtractCommentsInBlock(yaml, end, null, lineEnding: lineEnding);
   end = offsetOfLastComment;
 
   valueAsString = normalizeEncodedBlock(

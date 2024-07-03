@@ -297,9 +297,10 @@ String getLineEnding(String yaml) {
 (int endOffset, List<String> comments) skipAndExtractCommentsInBlock(
   String yaml,
   int currentEndOffset,
-  int? nextStartOffset, [
+  int? nextStartOffset, {
   String lineEnding = '\n',
-]) {
+  bool greedy = false,
+}) {
   /// If [nextStartOffset] is null, this may be the last element in a collection
   /// and thus we have to check and extract comments manually.
   ///
@@ -336,6 +337,13 @@ String getLineEnding(String yaml) {
       return (firstLineBreak, nextIndex);
     }
 
+    /// Returns the [currentOffset] if [greedy] is true. Otherwise, attempts
+    /// returning the [firstLineBreakOffset] if not null if [greedy] is false.
+    int earlyBreakOffset(int currentOffset, int? firstLineBreakOffset) {
+      if (greedy) return currentOffset;
+      return firstLineBreakOffset ?? currentOffset;
+    }
+
     var currentOffset = currentEndOffset;
 
     while (true) {
@@ -353,7 +361,7 @@ String getLineEnding(String yaml) {
         /// string. Since we lazily evaluated the string, attempt to return the
         /// first [lineEnding] we encountered only if not null.
         if (nextIndex == null) {
-          currentOffset = firstLE ?? yaml.length;
+          currentOffset = earlyBreakOffset(yaml.length, firstLE);
           break;
         }
 
@@ -373,7 +381,7 @@ String getLineEnding(String yaml) {
       /// Since we lazily evaluated the string, attempt to return the
       /// first [lineEnding] we encountered only if not null.
       if (indexOfCommentStart == -1) {
-        currentOffset = firstLineBreak ?? currentOffset;
+        currentOffset = earlyBreakOffset(currentOffset, firstLineBreak);
         break;
       }
 
