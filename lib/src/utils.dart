@@ -402,7 +402,7 @@ String getLineEnding(String yaml) {
         currentOffset += comment.length;
         break;
       }
-      currentOffset = indexOfLineBreak + 1; // Skip line-break eagerly
+      currentOffset = indexOfLineBreak;
     }
 
     return (currentOffset, comments);
