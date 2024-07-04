@@ -227,7 +227,7 @@ SourceEdit _removeFromBlockMap(
   /// Null values have an invalid offset. Include colon.
   ///
   /// See issue open in `package: yaml`.
-  var endOffset = valueNode.value == null
+  var endOffset = valueNode.span.length == 0
       ? keySpan.end.offset + 2
       : getContentSensitiveEnd(valueNode) + 1; // Overeager to avoid issues
 
