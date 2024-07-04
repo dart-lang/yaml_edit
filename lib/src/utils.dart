@@ -421,6 +421,30 @@ String getLineEnding(String yaml) {
   );
 }
 
+/// Reclaims any indent greedily skipped by [skipAndExtractCommentsInBlock]
+/// and returns the start `offset` (inclusive).
+///
+/// If [isSingle] is `true`, then the `offset` of the line-break is included.
+/// It is excluded if `false`.
+///
+/// It is recommended that this function is called when removing the last
+/// [YamlNode] in a block [YamlMap] or [YamlList].
+int reclaimIndentAndLinebreak(
+  String yaml,
+  int currentOffset, {
+  required bool isSingle,
+}) {
+  var indexOfLineBreak = yaml.lastIndexOf('\n', currentOffset);
+
+  /// In case, this isn't the only element, we ignore the line-break while
+  /// reclaiming the indent. As the element that remains, will have a line
+  /// break the next node needs to indicate start of a new node!
+  if (!isSingle) indexOfLineBreak += 1;
+
+  final indentDiff = currentOffset - indexOfLineBreak;
+  return currentOffset - indentDiff;
+}
+
 /// Normalizes an encoded [YamlNode] encoded as a string by pruning any
 /// dangling line-breaks.
 ///
