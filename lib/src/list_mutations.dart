@@ -275,7 +275,7 @@ SourceEdit _insertInBlockList(
 /// ```
 (bool isNested, int offset) _isNestedInBlockList(
     int currentSequenceOffset, String yaml) {
-  final startIndex = currentSequenceOffset - 1;
+  final startOffset = currentSequenceOffset - 1;
 
   /// Indicates the element we are inserting before is at index `0` of the list
   /// at the root of the yaml
@@ -284,10 +284,10 @@ SourceEdit _insertInBlockList(
   ///
   /// - foo
   /// ^ Inserting before this
-  if (startIndex < 0) return (false, 0);
+  if (startOffset < 0) return (false, 0);
 
-  final newLineStart = yaml.lastIndexOf('\n', startIndex);
-  final seqStart = yaml.lastIndexOf('-', startIndex);
+  final newLineStart = yaml.lastIndexOf('\n', startOffset);
+  final seqStart = yaml.lastIndexOf('-', startOffset);
 
   /// Indicates that a `\n` is closer to the last `-`. Meaning this list is not
   /// nested.
@@ -344,70 +344,85 @@ SourceEdit _removeFromBlockList(
     YamlEditor yamlEdit, YamlList list, YamlNode nodeToRemove, int index) {
   RangeError.checkValueInInterval(index, 0, list.length - 1);
 
-  var end = getContentSensitiveEnd(nodeToRemove);
-
-  /// If we are removing the last element in a block list, convert it into a
-  /// flow empty list.
-  if (list.length == 1) {
-    final start = list.span.start.offset;
-
-    return SourceEdit(start, end - start, '[]');
-  }
-
   final yaml = yamlEdit.toString();
-  final span = nodeToRemove.span;
+  final yamlSize = yaml.length;
 
-  /// Adjust the end to clear the new line after the end too.
+  final lineEnding = getLineEnding(yaml);
+  final YamlNode(:span) = nodeToRemove;
+
+  var startOffset = span.start.offset;
+  startOffset =
+      span.length == 0 ? startOffset : yaml.lastIndexOf('-', startOffset - 1);
+
+  var endOffset = getContentSensitiveEnd(nodeToRemove);
+
+  /// YamlMap may have `null` value for the last key and we need to ensure the
+  /// correct [endOffset] is provided to [skipAndExtractCommentsInBlock],
+  /// otherwise [skipAndExtractCommentsInBlock] may prematurely return an
+  /// incorrect offset because it immediately saw `:`
+  if (nodeToRemove is YamlMap &&
+      endOffset < yamlSize &&
+      nodeToRemove.nodes.entries.last.value.value == null) {
+    endOffset += 1;
+  }
+
+  // We remove any content belonging to [nodeToRemove] greedily
+  endOffset = skipAndExtractCommentsInBlock(
+    yaml,
+    endOffset == startOffset ? endOffset + 1 : endOffset,
+    null,
+    lineEnding: lineEnding,
+    greedy: true,
+  ).$1;
+
+  final listSize = list.length;
+
+  final isSingleElement = listSize == 1;
+  final isLastElementInList = index == listSize - 1;
+  final isLastInYaml = endOffset == yamlSize;
+
+  final replacement = listSize == 1 ? '[]' : '';
+
+  /// Adjust [startIndent] to include any indent this element may have had
+  /// to prevent it from interfering with the indent of the next [YamlNode]
+  /// which isn't in this list. We move it back if:
+  ///   1. The [nodeToRemove] is the last element in a [list] with more than
+  ///      one element.
+  ///   2. It also isn't the first element in the yaml.
   ///
-  /// We do this because we suspect that our users will want the inline
-  /// comments to disappear too.
-  final nextNewLine = yaml.indexOf('\n', end);
-  if (nextNewLine != -1) {
-    end = nextNewLine + 1;
+  /// Doing this only for the last element ensures that any value's indent is
+  /// automatically given to the next element in the list such that,
+  ///
+  /// 1. If nested:
+  ///     -  - value
+  ///      ^ This space goes to the next element that ends up here
+  ///
+  /// 2. If not nested, then the next element gets the indent if any is present.
+  if (isLastElementInList && startOffset != 0 && !isSingleElement) {
+    final index = yaml.lastIndexOf('\n', startOffset);
+    startOffset = index == -1 ? startOffset : index + 1;
   }
 
-  /// If the value is empty
-  if (span.length == 0) {
-    var start = span.start.offset;
-    return SourceEdit(start, end - start, '');
+  /// We intentionally [skipAndExtractCommentsInBlock] greedily which also
+  /// consumes the next [YamlNode]'s indent.
+  ///
+  /// For elements at the last index, we need to reclaim the indent belonging
+  /// to the next node not in the list and optionally include a line break if
+  /// if it is the only element. See [reclaimIndentAndLinebreak] for more info.
+  if (isLastElementInList && !isLastInYaml) {
+    endOffset = reclaimIndentAndLinebreak(
+      yaml,
+      endOffset,
+      isSingle: isSingleElement,
+    );
+  } else if (isLastInYaml && yaml[endOffset - 1] == '\n' && isSingleElement) {
+    /// Include any trailing line break that may have been part of the yaml:
+    ///   -`\r\n` = 2
+    ///   - `\n` = 1
+    endOffset -= lineEnding == '\n' ? 1 : 2;
   }
 
-  /// -1 accounts for the fact that the content can start with a dash
-  var start = yaml.lastIndexOf('-', span.start.offset - 1);
-
-  /// Check if there is a `-` before the node
-  if (start > 0) {
-    final lastHyphen = yaml.lastIndexOf('-', start - 1);
-    final lastNewLine = yaml.lastIndexOf('\n', start - 1);
-    if (lastHyphen > lastNewLine) {
-      start = lastHyphen + 2;
-
-      /// If there is a `-` before the node, we need to check if we have
-      /// to update the indentation of the next node.
-      if (index < list.length - 1) {
-        /// Since [end] is currently set to the next new line after the current
-        /// node, check if we see a possible comment first, or a hyphen first.
-        /// Note that no actual content can appear here.
-        ///
-        /// We check this way because the start of a span in a block list is
-        /// the start of its value, and checking from the back leaves us
-        /// easily confused if there are comments that have dashes in them.
-        final nextHash = yaml.indexOf('#', end);
-        final nextHyphen = yaml.indexOf('-', end);
-        final nextNewLine = yaml.indexOf('\n', end);
-
-        /// If [end] is on the same line as the hyphen of the next node
-        if ((nextHash == -1 || nextHyphen < nextHash) &&
-            nextHyphen < nextNewLine) {
-          end = nextHyphen;
-        }
-      }
-    } else if (lastNewLine > lastHyphen) {
-      start = lastNewLine + 1;
-    }
-  }
-
-  return SourceEdit(start, end - start, '');
+  return SourceEdit(startOffset, endOffset - startOffset, replacement);
 }
 
 /// Returns a [SourceEdit] describing the change to be made on [yamlEdit] to
