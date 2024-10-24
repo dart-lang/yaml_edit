@@ -469,14 +469,14 @@ String normalizeEncodedBlock(
   required String updateAsString,
   bool skipPreservationCheck = false,
 }) {
-  var terminalNode = update;
+  final terminalNode = _findTerminalScalar(update);
 
-  /// Checks if the dangling line break should be allowed within the deepest
-  /// [YamlNode] that is a [YamlScalar].
+  /// Nested function that checks if the dangling line break should be allowed
+  /// within the deepest [YamlNode] that is a [YamlScalar].
   bool allowInYamlScalar(ScalarStyle style, dynamic value) {
     /// We never normalize a literal/folded string irrespective of
-    /// its position.  We allow the block indicators to define how line break
-    /// will be treated
+    /// its position.  We allow the block indicators to define how the
+    /// line-break will be treated
     if (style == ScalarStyle.LITERAL || style == ScalarStyle.FOLDED) {
       return true;
     }
@@ -488,31 +488,6 @@ String normalizeEncodedBlock(
     }
 
     return false;
-  }
-
-  loop:
-  while (terminalNode is! YamlScalar) {
-    switch (terminalNode) {
-      case YamlList list:
-        {
-          if (list.isEmpty) {
-            terminalNode = list;
-            break loop;
-          }
-
-          terminalNode = list.nodes.last;
-        }
-
-      case YamlMap map:
-        {
-          if (map.isEmpty) {
-            terminalNode = map;
-            break loop;
-          }
-
-          terminalNode = map.nodes.entries.last.value;
-        }
-    }
   }
 
   /// The node may end up being an empty [YamlMap] or [YamlList] or
@@ -536,6 +511,35 @@ String normalizeEncodedBlock(
 
   // Remove trailing line-break by default.
   return updateAsString.trimRight();
+}
+
+/// Returns the terminal [YamlNode] that is a [YamlScalar].
+///
+/// If within a [YamlList], then the last value that is a [YamlScalar]. If
+/// within a [YamlMap], then the last entry with a value that is a [YamlScalar].
+YamlScalar? _findTerminalScalar(YamlNode node) {
+  YamlNode? terminalNode = node;
+
+  while (terminalNode is! YamlScalar) {
+    switch (terminalNode) {
+      case YamlList list:
+        {
+          if (list.isEmpty) return null;
+          terminalNode = list.nodes.last;
+        }
+
+      case YamlMap map:
+        {
+          if (map.isEmpty) return null;
+          terminalNode = map.nodes.entries.last.value;
+        }
+
+      default:
+        return null;
+    }
+  }
+
+  return terminalNode;
 }
 
 extension YamlNodeExtension on YamlNode {
