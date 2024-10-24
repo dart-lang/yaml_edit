@@ -6,6 +6,7 @@ import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 
+// TODO: Add test for string with trailing space
 final _testStrings = [
   "this is a fairly' long string with\nline breaks",
   'whitespace\n after line breaks',

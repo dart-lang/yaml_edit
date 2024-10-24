@@ -145,19 +145,25 @@ String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
     stripped = stripped.substring(0, stripped.length - 1);
   }
 
-  /// If indeed we have a trailing line, we apply a `chomping hack`. We use a
-  /// `clip indicator` (no chomping indicator) if we need to ignore the `\n`
-  /// and `strip indicator` if not to remove any trailing indents.
+  /// If indeed we have a trailing line-break, we apply a `chomping hack`.
   ///
-  /// The caller of this method, that is, [yamlEncodeBlock] will apply a
-  /// dangling `\n` that will\should be normalized by
-  /// [normalizeEncodedBlock] which allows trailing `\n` for [folded]
-  /// strings such that:
-  ///  * If we had a string `"my string \n"`:
-  ///     1. This function excludes it and it becomes `>\n<indent>my string `
-  ///     2. [yamlEncodeBlock] applies `\n` that we skipped.
-  ///     2. [normalizeEncodedBlock] ignores the trailing `\n` for folded
-  ///        string by default.
+  /// We use a `clip indicator` (no chomping indicator) if we need to ignore the
+  /// `\n` and `strip indicator` to remove any trailing line-break and its
+  /// indent.
+  ///
+  /// The caller of this method, that is, [yamlEncodeBlock], will apply a
+  /// dangling `\n` that must be normalized by [normalizeEncodedBlock] which
+  /// allows trailing `\n` for [folded] strings such that:
+  ///  * If we had a string "example \n":
+  ///     1. This function excludes the line-break at the end and it becomes:
+  ///       - ">" + "\n" + <indent> + "example "
+  ///
+  ///     2. [yamlEncodeBlock] applies a dangling `\n` that we skipped and it
+  ///        becomes:
+  ///         - ">" + "\n" + <indent> + "example " + \n`
+  ///
+  ///     3. [normalizeEncodedBlock] never prunes the dangling `\n` applied for
+  ///        folded strings by default.
   return '>${ignoreTrailingLineBreak ? '' : '-'}\n'
       '$indent$trimmed'
       '${stripped.replaceAll(lineEnding, lineEnding + indent)}';
@@ -210,19 +216,25 @@ String? _tryYamlEncodeLiteral(
     stripped = stripped.substring(0, stripped.length - 1);
   }
 
-  /// If indeed we have a trailing line, we apply a `chomping hack`. We use a
-  /// `clip indicator` (no chomping indicator) if we need to ignore the `\n`
-  /// and `strip indicator` if not to remove any trailing indents.
+  /// If indeed we have a trailing line-break, we apply a `chomping hack`.
   ///
-  /// The caller of this method, that is, [yamlEncodeBlock] will apply a
-  /// dangling `\n` that will\should be normalized by
-  /// [normalizeEncodedBlock] which allows trailing `\n` for [literal]
-  /// strings such that:
-  ///  * If we had a string `"my string \n"`:
-  ///     1. This function excludes it and it becomes `|\n<indent>my string `
-  ///     2. [yamlEncodeBlock] applies `\n` that we skipped.
-  ///     2. [normalizeEncodedBlock] ignores the trailing `\n` for literal
-  ///        string by default.
+  /// We use a `clip indicator` (no chomping indicator) if we need to ignore the
+  /// `\n` and `strip indicator` to remove any trailing line-break and its
+  /// indent.
+  ///
+  /// The caller of this method, that is, [yamlEncodeBlock], will apply a
+  /// dangling `\n` that must be normalized by [normalizeEncodedBlock] which
+  /// allows trailing `\n` for [literal] strings such that:
+  ///  * If we had a string "example \n":
+  ///     1. This function excludes the line-break at the end and it becomes:
+  ///       - ">" + "\n" + <indent> + "example "
+  ///
+  ///     2. [yamlEncodeBlock] applies a dangling `\n` that we skipped and it
+  ///        becomes:
+  ///         - ">" + "\n" + <indent> + "example " + \n`
+  ///
+  ///     3. [normalizeEncodedBlock] never prunes the dangling `\n` applied for
+  ///        literal strings by default.
   return '|${ignoreTrailingLineBreak ? '' : '-'}\n'
       '$indent${trimmed.replaceAll('\n', lineEnding + indent)}'
       '${stripped.replaceAll(lineEnding, lineEnding + indent)}';
