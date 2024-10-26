@@ -273,17 +273,19 @@ String getLineEnding(String yaml) {
   return windowsNewlines > unixNewlines ? '\r\n' : '\n';
 }
 
-/// Extracts comments for a node that is replaced within a [YamlMap] or
-/// [YamlList] or a top-level [YamlScalar] of the [yaml] string provided.
+/// Skips and extracts comments for a replaced/removed [YamlNode].
 ///
-/// [endOfNodeOffset] represents the end offset of [YamlScalar] or [YamlList]
-/// or [YamlMap] being replaced, that is, `end + 1`.
+/// [endOfNodeOffset] represents the end offset of the [YamlNode] being
+/// replaced, that is, `end + 1`.
 ///
 /// [nextStartOffset] represents the start offset of the next [YamlNode].
-/// May be null if the current [YamlNode] being replaced is the last node
-/// in a [YamlScalar] or [YamlList] or if its the only top-level [YamlScalar].
-/// If not sure of the next [YamlNode]'s [nextStartOffset] pass in null and
-/// allow this function to handle that manually.
+/// Should be null if the current [YamlNode] being replaced is:
+///   - The terminal node in a top-level [YamlList]
+///   - The last entry or value in an entry in a top-level [YamlMap]
+///   - The only top-level [YamlScalar].
+///
+/// It is recommended to ignore or pass in `null` for [nextStartOffset] since
+/// this function immediately exits once no comments are found.
 ///
 /// If [greedy] is `true`, whitespace and any line breaks are skipped. If
 /// `false`, this function looks for comments lazily and returns the offset of
@@ -298,10 +300,10 @@ String getLineEnding(String yaml) {
 /// Returns the `endOffset` of the last comment extracted that is `end + 1`
 /// and a `List<String> comments`. It is recommended (but not necessary) that
 /// the caller checks the `endOffset` is still within the bounds of the [yaml].
-(int endOffset, List<String> comments) skipAndExtractCommentsInBlock(
-  String yaml,
-  int endOfNodeOffset,
-  int? nextStartOffset, {
+({int endOffset, List<String> comments}) skipAndExtractCommentsInBlock(
+  String yaml, {
+  required int endOfNodeOffset,
+  int? nextStartOffset,
   String lineEnding = '\n',
   bool greedy = false,
 }) {
@@ -312,7 +314,7 @@ String getLineEnding(String yaml) {
   if (nextStartOffset == null) {
     final comments = <String>[];
 
-    /// Skips white-space while extracting comments.
+    /// Nested function that skips white-space while extracting comments.
     ///
     /// Returns [null] if the end of the [yaml] was encountered while
     /// skipping any white-space. Otherwise, returns the [index] of the next
@@ -341,8 +343,8 @@ String getLineEnding(String yaml) {
       return (firstLineBreak, nextIndex);
     }
 
-    /// Returns the [currentOffset] if [greedy] is true. Otherwise, attempts
-    /// returning the [firstLineBreakOffset] if not null if [greedy] is false.
+    /// Nested function that returns the [currentOffset] if [greedy] is true.
+    /// Otherwise, attempts to return the [firstLineBreakOffset] if not null.
     int earlyBreakOffset(int currentOffset, int? firstLineBreakOffset) {
       if (greedy) return currentOffset;
       return firstLineBreakOffset ?? currentOffset;
@@ -351,7 +353,7 @@ String getLineEnding(String yaml) {
     var currentOffset = endOfNodeOffset;
 
     while (true) {
-      if (currentOffset == yaml.length) break;
+      if (currentOffset >= yaml.length) break;
 
       var leadingChar = yaml[currentOffset].trim();
       var indexOfCommentStart = -1;
@@ -361,9 +363,7 @@ String getLineEnding(String yaml) {
       if (leadingChar.isEmpty) {
         final (firstLE, nextIndex) = skipWhitespace(currentOffset);
 
-        /// If the next index is null, it means we reached the end of the
-        /// string. Since we lazily evaluated the string, attempt to return the
-        /// first [lineEnding] we encountered only if not null.
+        // We skipped everything to the end of the yaml
         if (nextIndex == null) {
           currentOffset = earlyBreakOffset(yaml.length, firstLE);
           break;
@@ -374,16 +374,12 @@ String getLineEnding(String yaml) {
         leadingChar = yaml[currentOffset];
       }
 
-      /// We need comments only, nothing else. This may be pointless but will
-      /// help us avoid extracting comments when provided random offsets
-      /// within a string.
+      /// We need comments only! This may be pointless but will help us exit
+      /// early when provided random offsets within a string.
       if (leadingChar == '#') indexOfCommentStart = currentOffset;
 
       /// This is a mindless assumption that the last character was either
       /// `\n` or [white-space] or the last erroneus offset provided.
-      ///
-      /// Since we lazily evaluated the string, attempt to return the
-      /// first [lineEnding] we encountered only if not null.
       if (indexOfCommentStart == -1) {
         currentOffset = earlyBreakOffset(currentOffset, firstLineBreak);
         break;
@@ -405,12 +401,13 @@ String getLineEnding(String yaml) {
       currentOffset = indexOfLineBreak;
     }
 
-    return (currentOffset, comments);
+    return (endOffset: currentOffset, comments: comments);
   }
 
   return (
-    nextStartOffset,
-    yaml.substring(endOfNodeOffset, nextStartOffset).split(lineEnding).fold(
+    endOffset: nextStartOffset,
+    comments:
+        yaml.substring(endOfNodeOffset, nextStartOffset).split(lineEnding).fold(
       <String>[],
       (buffer, current) {
         final comment = current.trim();

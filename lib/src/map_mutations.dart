@@ -181,10 +181,12 @@ SourceEdit _replaceInBlockMap(
           ? start + 1
           : end;
 
-  // Aggressively skip all comments
-  final (offsetOfLastComment, _) =
-      skipAndExtractCommentsInBlock(yaml, end, null, lineEnding: lineEnding);
-  end = offsetOfLastComment;
+  // Skip comments lazily
+  end = skipAndExtractCommentsInBlock(
+    yaml,
+    endOfNodeOffset: end,
+    lineEnding: lineEnding,
+  ).endOffset;
 
   valueAsString = normalizeEncodedBlock(
     yaml,
@@ -235,11 +237,10 @@ SourceEdit _removeFromBlockMap(
 
   endOffset = skipAndExtractCommentsInBlock(
     yaml,
-    endOffset,
-    null,
+    endOfNodeOffset: endOffset,
     lineEnding: lineEnding,
     greedy: true,
-  ).$1;
+  ).endOffset;
 
   final mapSize = map.length;
 

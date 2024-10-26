@@ -54,9 +54,11 @@ SourceEdit updateInList(
     }
 
     // Aggressively skip all comments
-    final (offsetOfLastComment, _) =
-        skipAndExtractCommentsInBlock(yaml, end, null, lineEnding: lineEnding);
-    end = offsetOfLastComment;
+    end = skipAndExtractCommentsInBlock(
+      yaml,
+      endOfNodeOffset: end,
+      lineEnding: lineEnding,
+    ).endOffset;
 
     valueString = normalizeEncodedBlock(
       yaml,
@@ -142,12 +144,11 @@ SourceEdit _appendToBlockList(
   final lineEnding = getLineEnding(yaml);
 
   // Lazily skip all comments and white-space at the end.
-  final (offset, _) = skipAndExtractCommentsInBlock(
+  final offset = skipAndExtractCommentsInBlock(
     yaml,
-    list.nodes.last.span.end.offset,
-    null,
+    endOfNodeOffset: list.nodes.last.span.end.offset,
     lineEnding: lineEnding,
-  );
+  ).endOffset;
 
   var (indentSize, formattedValue) = _formatNewBlock(yamlEdit, list, item);
 
@@ -369,11 +370,10 @@ SourceEdit _removeFromBlockList(
   // We remove any content belonging to [nodeToRemove] greedily
   endOffset = skipAndExtractCommentsInBlock(
     yaml,
-    endOffset == startOffset ? endOffset + 1 : endOffset,
-    null,
+    endOfNodeOffset: endOffset == startOffset ? endOffset + 1 : endOffset,
     lineEnding: lineEnding,
     greedy: true,
-  ).$1;
+  ).endOffset;
 
   final listSize = list.length;
 
@@ -381,7 +381,7 @@ SourceEdit _removeFromBlockList(
   final isLastElementInList = index == listSize - 1;
   final isLastInYaml = endOffset == yamlSize;
 
-  final replacement = listSize == 1 ? '[]' : '';
+  final replacement = isSingleElement ? '[]' : '';
 
   /// Adjust [startIndent] to include any indent this element may have had
   /// to prevent it from interfering with the indent of the next [YamlNode]
@@ -416,7 +416,7 @@ SourceEdit _removeFromBlockList(
       isSingle: isSingleElement,
     );
   } else if (isLastInYaml && yaml[endOffset - 1] == '\n' && isSingleElement) {
-    /// Include any trailing line break that may have been part of the yaml:
+    /// Remove any dangling line-break that may have been part of the yaml:
     ///   -`\r\n` = 2
     ///   - `\n` = 1
     endOffset -= lineEnding == '\n' ? 1 : 2;

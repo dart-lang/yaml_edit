@@ -243,13 +243,14 @@ class YamlEditor {
       final start = _contents.span.start.offset;
       var end = getContentSensitiveEnd(_contents);
       final lineEnding = getLineEnding(_yaml);
+
       end = skipAndExtractCommentsInBlock(
         _yaml,
-        end,
-        null,
+        endOfNodeOffset: end,
         lineEnding: lineEnding,
         greedy: true,
-      ).$1;
+      ).endOffset;
+
       var encoded = yamlEncodeBlock(valueNode, 0, lineEnding);
       encoded = normalizeEncodedBlock(
         _yaml,
