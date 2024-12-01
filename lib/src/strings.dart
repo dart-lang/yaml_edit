@@ -106,7 +106,7 @@ String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
 
   /// Remove trailing `\n` & white-space to ease string folding
   var trimmed = string.trimRight();
-  final stripped = string.substring(trimmed.length);
+  var stripped = string.substring(trimmed.length);
 
   final trimmedSplit =
       trimmed.replaceAll('\n', lineEnding + indent).split(lineEnding);
@@ -137,9 +137,36 @@ String? _tryYamlEncodeFolded(String string, int indentSize, String lineEnding) {
     return previous + lineEnding + updated;
   });
 
-  return '>-\n'
+  stripped = stripped.replaceAll('\n', lineEnding); // Mild paranoia
+  final ignoreTrailingLineBreak = stripped.endsWith(lineEnding);
+
+  // We ignore it with conviction as explained below.
+  if (ignoreTrailingLineBreak) {
+    stripped = stripped.substring(0, stripped.length - 1);
+  }
+
+  /// If indeed we have a trailing line-break, we apply a `chomping hack`.
+  ///
+  /// We use a `clip indicator` (no chomping indicator) if we need to ignore the
+  /// `\n` and `strip indicator` to remove any trailing line-break and its
+  /// indent.
+  ///
+  /// The caller of this method, that is, [yamlEncodeBlock], will apply a
+  /// dangling `\n` that must be normalized by [normalizeEncodedBlock] which
+  /// allows trailing `\n` for [folded] strings such that:
+  ///  * If we had a string "example \n":
+  ///     1. This function excludes the line-break at the end and it becomes:
+  ///       - ">" + "\n" + <indent> + "example "
+  ///
+  ///     2. [yamlEncodeBlock] applies a dangling `\n` that we skipped and it
+  ///        becomes:
+  ///         - ">" + "\n" + <indent> + "example " + \n`
+  ///
+  ///     3. [normalizeEncodedBlock] never prunes the dangling `\n` applied for
+  ///        folded strings by default.
+  return '>${ignoreTrailingLineBreak ? '' : '-'}\n'
       '$indent$trimmed'
-      '${stripped.replaceAll('\n', lineEnding + indent)}';
+      '${stripped.replaceAll(lineEnding, lineEnding + indent)}';
 }
 
 /// Attempts to encode a [string] as a _YAML literal string_ and apply the
@@ -170,13 +197,47 @@ String? _tryYamlEncodeLiteral(
   // encoded in literal mode.
   if (_hasUnprintableCharacters(string)) return null;
 
-  // TODO: Are there other strings we can't encode in literal mode?
-
   final indent = ' ' * indentSize;
 
-  /// Simplest block style.
-  /// * https://yaml.org/spec/1.2.2/#812-literal-style
-  return '|-\n$indent${string.replaceAll('\n', lineEnding + indent)}';
+  // TODO: Are there other strings we can't encode in literal mode?
+  final trimmed = string.trimRight();
+
+  // Mild paranoia
+  var stripped = string
+      .substring(
+        trimmed.length,
+      )
+      .replaceAll('\n', lineEnding);
+
+  final ignoreTrailingLineBreak = stripped.endsWith(lineEnding);
+
+  // We ignore it with conviction as explained below.
+  if (ignoreTrailingLineBreak) {
+    stripped = stripped.substring(0, stripped.length - 1);
+  }
+
+  /// If indeed we have a trailing line-break, we apply a `chomping hack`.
+  ///
+  /// We use a `clip indicator` (no chomping indicator) if we need to ignore the
+  /// `\n` and `strip indicator` to remove any trailing line-break and its
+  /// indent.
+  ///
+  /// The caller of this method, that is, [yamlEncodeBlock], will apply a
+  /// dangling `\n` that must be normalized by [normalizeEncodedBlock] which
+  /// allows trailing `\n` for [literal] strings such that:
+  ///  * If we had a string "example \n":
+  ///     1. This function excludes the line-break at the end and it becomes:
+  ///       - ">" + "\n" + <indent> + "example "
+  ///
+  ///     2. [yamlEncodeBlock] applies a dangling `\n` that we skipped and it
+  ///        becomes:
+  ///         - ">" + "\n" + <indent> + "example " + \n`
+  ///
+  ///     3. [normalizeEncodedBlock] never prunes the dangling `\n` applied for
+  ///        literal strings by default.
+  return '|${ignoreTrailingLineBreak ? '' : '-'}\n'
+      '$indent${trimmed.replaceAll('\n', lineEnding + indent)}'
+      '${stripped.replaceAll(lineEnding, lineEnding + indent)}';
 }
 
 /// Encodes a flow [YamlScalar] based on the provided [YamlScalar.style].
@@ -276,64 +337,56 @@ String yamlEncodeFlow(YamlNode value) {
 }
 
 /// Returns [value] with the necessary formatting applied in a block context.
-String yamlEncodeBlock(
-  YamlNode value,
-  int indentation,
-  String lineEnding,
-) {
+///
+/// It is recommended that callers of this method also make a call to
+/// [normalizeEncodedBlock] with this [value] as the `update` and output
+/// of this call as the `updateAsString` to prune any dangling line-break.
+String yamlEncodeBlock(YamlNode value, int indentation, String lineEnding) {
   const additionalIndentation = 2;
 
-  if (!isBlockNode(value)) return yamlEncodeFlow(value);
+  if (!isBlockNode(value)) return yamlEncodeFlow(value) + lineEnding;
 
   final newIndentation = indentation + additionalIndentation;
 
   if (value is YamlList) {
-    if (value.isEmpty) return '${' ' * indentation}[]';
+    if (value.isEmpty) return '${' ' * indentation}[]$lineEnding';
 
-    Iterable<String> safeValues;
+    return value.nodes.fold('', (string, element) {
+      var valueString = yamlEncodeBlock(element, newIndentation, lineEnding);
 
-    final children = value.nodes;
-
-    safeValues = children.map((child) {
-      var valueString = yamlEncodeBlock(child, newIndentation, lineEnding);
-      if (isCollection(child) && !isFlowYamlCollectionNode(child)) {
+      if (isCollection(element) && !isFlowYamlCollectionNode(element)) {
         valueString = valueString.substring(newIndentation);
       }
 
-      return '${' ' * indentation}- $valueString';
+      return '$string${' ' * indentation}- $valueString';
     });
-
-    return safeValues.join(lineEnding);
   } else if (value is YamlMap) {
-    if (value.isEmpty) return '${' ' * indentation}{}';
+    if (value.isEmpty) return '${' ' * indentation}{}$lineEnding';
 
-    return value.nodes.entries.map((entry) {
+    return value.nodes.entries.fold('', (string, entry) {
       final MapEntry(:key, :value) = entry;
 
       final safeKey = yamlEncodeFlow(key as YamlNode);
-      final formattedKey = ' ' * indentation + safeKey;
+      var formattedKey = ' ' * indentation + safeKey;
 
-      final formattedValue = yamlEncodeBlock(
-        value,
-        newIndentation,
-        lineEnding,
-      );
+      final formattedValue = yamlEncodeBlock(value, newIndentation, lineEnding);
 
       /// Empty collections are always encoded in flow-style, so new-line must
-      /// be avoided
-      if (isCollection(value) && !isEmpty(value)) {
-        return '$formattedKey:$lineEnding$formattedValue';
-      }
+      /// be avoided. Otherwise, begin the collection on a new line.
+      formattedKey = '$formattedKey:'
+          '${isCollection(value) && !isEmpty(value) ? lineEnding : " "}';
 
-      return '$formattedKey: $formattedValue';
-    }).join(lineEnding);
+      return '$string$formattedKey$formattedValue';
+    });
   }
 
-  return _yamlEncodeBlockScalar(
+  final encodedScalar = _yamlEncodeBlockScalar(
     value as YamlScalar,
     newIndentation,
     lineEnding,
   );
+
+  return encodedScalar + lineEnding;
 }
 
 /// List of unprintable characters.

@@ -277,6 +277,272 @@ String getLineEnding(String yaml) {
   return windowsNewlines > unixNewlines ? '\r\n' : '\n';
 }
 
+/// Skips and extracts comments for a replaced/removed [YamlNode].
+///
+/// [endOfNodeOffset] represents the end offset of the [YamlNode] being
+/// replaced, that is, `end + 1`.
+///
+/// [nextStartOffset] represents the start offset of the next [YamlNode].
+/// Should be null if the current [YamlNode] being replaced is:
+///   - The terminal node in a top-level [YamlList]
+///   - The last entry or value in an entry in a top-level [YamlMap]
+///   - The only top-level [YamlScalar].
+///
+/// It is recommended to ignore or pass in `null` for [nextStartOffset] since
+/// this function immediately exits once no comments are found.
+///
+/// If [greedy] is `true`, whitespace and any line breaks are skipped. If
+/// `false`, this function looks for comments lazily and returns the offset of
+/// the first line break that was encountered if no comments were found.
+///
+/// Do note that this function has no context of the structure of the [yaml]
+/// but assumes the caller does and requires comments based on the offsets
+/// provided and thus, may be erroneus since it exclusively scans for `#`
+/// delimiter or extracts the comments between the [endOfNodeOffset] and
+/// [nextStartOffset] if both are provided.
+///
+/// Returns the `endOffset` of the last comment extracted that is `end + 1`
+/// and a `List<String> comments`. It is recommended (but not necessary) that
+/// the caller checks the `endOffset` is still within the bounds of the [yaml].
+({int endOffset, List<String> comments}) skipAndExtractCommentsInBlock(
+  String yaml, {
+  required int endOfNodeOffset,
+  int? nextStartOffset,
+  String lineEnding = '\n',
+  bool greedy = false,
+}) {
+  /// If [nextStartOffset] is null, this may be the last element in a collection
+  /// and thus we have to check and extract comments manually.
+  ///
+  /// Also, the caller may not be sure where the next node starts.
+  if (nextStartOffset == null) {
+    final comments = <String>[];
+
+    /// Nested function that skips white-space while extracting comments.
+    ///
+    /// Returns [null] if the end of the [yaml] was encountered while
+    /// skipping any white-space. Otherwise, returns the [index] of the next
+    /// non-white-space character.
+    (int? firstLineBreakOffset, int? nextIndex) skipWhitespace(int index) {
+      int? firstLineBreak;
+      int? nextIndex = index;
+
+      while (true) {
+        if (nextIndex == yaml.length) {
+          nextIndex = null;
+          break;
+        }
+
+        final char = yaml[nextIndex!];
+
+        if (char == lineEnding && firstLineBreak == null) {
+          firstLineBreak = nextIndex;
+        }
+
+        if (char.trim().isNotEmpty) break;
+        ++nextIndex;
+      }
+
+      if (firstLineBreak != null) firstLineBreak += 1; // Skip it if not null
+      return (firstLineBreak, nextIndex);
+    }
+
+    /// Nested function that returns the [currentOffset] if [greedy] is true.
+    /// Otherwise, attempts to return the [firstLineBreakOffset] if not null.
+    int earlyBreakOffset(int currentOffset, int? firstLineBreakOffset) {
+      if (greedy) return currentOffset;
+      return firstLineBreakOffset ?? currentOffset;
+    }
+
+    var currentOffset = endOfNodeOffset;
+
+    while (true) {
+      if (currentOffset >= yaml.length) break;
+
+      var leadingChar = yaml[currentOffset].trim();
+      var indexOfCommentStart = -1;
+
+      int? firstLineBreak;
+
+      if (leadingChar.isEmpty) {
+        final (firstLE, nextIndex) = skipWhitespace(currentOffset);
+
+        // We skipped everything to the end of the yaml
+        if (nextIndex == null) {
+          currentOffset = earlyBreakOffset(yaml.length, firstLE);
+          break;
+        }
+
+        firstLineBreak = firstLE;
+        currentOffset = nextIndex;
+        leadingChar = yaml[currentOffset];
+      }
+
+      /// We need comments only! This may be pointless but will help us exit
+      /// early when provided random offsets within a string.
+      if (leadingChar == '#') indexOfCommentStart = currentOffset;
+
+      /// This is a mindless assumption that the last character was either
+      /// `\n` or [white-space] or the last erroneus offset provided.
+      if (indexOfCommentStart == -1) {
+        currentOffset = earlyBreakOffset(currentOffset, firstLineBreak);
+        break;
+      }
+
+      final indexOfLineBreak = yaml.indexOf(lineEnding, currentOffset);
+      final isEnd = indexOfLineBreak == -1;
+
+      final comment = yaml
+          .substring(indexOfCommentStart, isEnd ? null : indexOfLineBreak)
+          .trim();
+
+      if (comment.isNotEmpty) comments.add(comment);
+
+      if (isEnd) {
+        currentOffset += comment.length;
+        break;
+      }
+      currentOffset = indexOfLineBreak;
+    }
+
+    return (endOffset: currentOffset, comments: comments);
+  }
+
+  return (
+    endOffset: nextStartOffset,
+    comments:
+        yaml.substring(endOfNodeOffset, nextStartOffset).split(lineEnding).fold(
+      <String>[],
+      (buffer, current) {
+        final comment = current.trim();
+        if (comment.isNotEmpty) buffer.add(comment);
+        return buffer;
+      },
+    )
+  );
+}
+
+/// Reclaims any indent greedily skipped by [skipAndExtractCommentsInBlock]
+/// and returns the start `offset` (inclusive).
+///
+/// If [isSingle] is `true`, then the `offset` of the line-break is included.
+/// It is excluded if `false`.
+///
+/// It is recommended that this function is called when removing the last
+/// [YamlNode] in a block [YamlMap] or [YamlList].
+int reclaimIndentAndLinebreak(
+  String yaml,
+  int currentOffset, {
+  required bool isSingle,
+}) {
+  var indexOfLineBreak = yaml.lastIndexOf('\n', currentOffset);
+
+  /// In case, this isn't the only element, we ignore the line-break while
+  /// reclaiming the indent. As the element that remains, will have a line
+  /// break the next node needs to indicate start of a new node!
+  if (!isSingle) indexOfLineBreak += 1;
+
+  final indentDiff = currentOffset - indexOfLineBreak;
+  return currentOffset - indentDiff;
+}
+
+/// Normalizes an encoded [YamlNode] encoded as a string by pruning any
+/// dangling line-breaks.
+///
+/// This function checks the last `YamlNode` of the [update] that is a
+/// `YamlScalar` and removes any dangling line-break within the
+/// [updateAsString].
+///
+/// Line breaks are allowed if a:
+///   1. [YamlScalar] has [ScalarStyle.LITERAL] or [ScalarStyle.FOLDED]
+///   2. [YamlScalar] has [ScalarStyle.PLAIN] or [ScalarStyle.ANY] and its
+///      raw value is a [String] with a trailing line break.
+///   3. [YamlNode] being replaced has a line break.
+///
+/// [skipPreservationCheck] should always remain false if updating a value
+/// within a [YamlList] or [YamlMap] that isn't an existing top-level
+/// [YamlNode].
+String normalizeEncodedBlock(
+  String yaml, {
+  required String lineEnding,
+  required int nodeToReplaceEndOffset,
+  required YamlNode update,
+  required String updateAsString,
+  bool skipPreservationCheck = false,
+}) {
+  final terminalNode = _findTerminalScalar(update);
+
+  /// Nested function that checks if the dangling line break should be allowed
+  /// within the deepest [YamlNode] that is a [YamlScalar].
+  bool allowInYamlScalar(ScalarStyle style, dynamic value) {
+    /// We never normalize a literal/folded string irrespective of
+    /// its position.  We allow the block indicators to define how the
+    /// line-break will be treated
+    if (style == ScalarStyle.LITERAL || style == ScalarStyle.FOLDED) {
+      return true;
+    }
+
+    // Allow trailing line break if the raw value has a explicit line break.
+    if (style == ScalarStyle.PLAIN || style == ScalarStyle.ANY) {
+      return value is String &&
+          (value.endsWith('\n') || value.endsWith('\r\n'));
+    }
+
+    return false;
+  }
+
+  /// The node may end up being an empty [YamlMap] or [YamlList] or
+  /// [YamlScalar].
+  if (terminalNode case YamlScalar(style: var style, value: var value)
+      when allowInYamlScalar(style, value)) {
+    return updateAsString;
+  }
+
+  if (yaml.isNotEmpty && !skipPreservationCheck) {
+    // Move it back one position. Offset passed in is/should be exclusive
+    final offsetBeforeEnd = nodeToReplaceEndOffset > 0
+        ? nodeToReplaceEndOffset - 1
+        : nodeToReplaceEndOffset;
+
+    /// Leave as is. The [update] is:
+    ///   1. An element not at the end of [YamlList] or [YamlMap]
+    ///   2. [YamlNode] replaced had a `\n`
+    if (yaml[offsetBeforeEnd] == '\n') return updateAsString;
+  }
+
+  // Remove trailing line-break by default.
+  return updateAsString.trimRight();
+}
+
+/// Returns the terminal [YamlNode] that is a [YamlScalar].
+///
+/// If within a [YamlList], then the last value that is a [YamlScalar]. If
+/// within a [YamlMap], then the last entry with a value that is a [YamlScalar].
+YamlScalar? _findTerminalScalar(YamlNode node) {
+  YamlNode? terminalNode = node;
+
+  while (terminalNode is! YamlScalar) {
+    switch (terminalNode) {
+      case YamlList list:
+        {
+          if (list.isEmpty) return null;
+          terminalNode = list.nodes.last;
+        }
+
+      case YamlMap map:
+        {
+          if (map.isEmpty) return null;
+          terminalNode = map.nodes.entries.last.value;
+        }
+
+      default:
+        return null;
+    }
+  }
+
+  return terminalNode;
+}
+
 extension YamlNodeExtension on YamlNode {
   /// Returns the [CollectionStyle] of `this` if `this` is [YamlMap] or
   /// [YamlList].

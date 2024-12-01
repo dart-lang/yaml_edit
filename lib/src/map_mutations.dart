@@ -36,7 +36,7 @@ SourceEdit updateInMap(
 /// removing the element at [key] when re-parsed.
 SourceEdit removeInMap(YamlEditor yamlEdit, YamlMap map, Object? key) {
   assert(containsKey(map, key));
-  final keyNode = getKeyNode(map, key);
+  final (_, keyNode) = getKeyNode(map, key);
   final valueNode = map.nodes[keyNode]!;
 
   if (map.style == CollectionStyle.FLOW) {
@@ -83,13 +83,14 @@ SourceEdit _addToBlockMap(
     }
   }
 
-  var valueString = yamlEncodeBlock(newValue, newIndentation, lineEnding);
+  final valueString = yamlEncodeBlock(newValue, newIndentation, lineEnding);
+
   if (isCollection(newValue) &&
       !isFlowYamlCollectionNode(newValue) &&
       !isEmpty(newValue)) {
-    formattedValue += '$keyString:$lineEnding$valueString$lineEnding';
+    formattedValue += '$keyString:$lineEnding$valueString';
   } else {
-    formattedValue += '$keyString: $valueString$lineEnding';
+    formattedValue += '$keyString: $valueString';
   }
 
   return SourceEdit(offset, 0, formattedValue);
@@ -127,12 +128,17 @@ SourceEdit _replaceInBlockMap(
     YamlEditor yamlEdit, YamlMap map, Object? key, YamlNode newValue) {
   final yaml = yamlEdit.toString();
   final lineEnding = getLineEnding(yaml);
-  final newIndentation =
-      getMapIndentation(yaml, map) + getIndentation(yamlEdit);
+  final mapIndentation = getMapIndentation(yaml, map);
+  final newIndentation = mapIndentation + getIndentation(yamlEdit);
 
-  final keyNode = getKeyNode(map, key);
-  var valueAsString =
-      yamlEncodeBlock(wrapAsYamlNode(newValue), newIndentation, lineEnding);
+  final (_, keyNode) = getKeyNode(map, key);
+
+  var valueAsString = yamlEncodeBlock(
+    wrapAsYamlNode(newValue),
+    newIndentation,
+    lineEnding,
+  );
+
   if (isCollection(newValue) &&
       !isFlowYamlCollectionNode(newValue) &&
       !isEmpty(newValue)) {
@@ -150,9 +156,45 @@ SourceEdit _replaceInBlockMap(
   var end = getContentSensitiveEnd(map.nodes[key]!);
 
   /// `package:yaml` parses empty nodes in a way where the start/end of the
-  /// empty value node is the end of the key node, so we have to adjust for
-  /// this.
-  if (end < start) end = start;
+  /// empty value node is the end of the key node.
+  ///
+  /// In our case, we need to ensure that any line-breaks are included in the
+  /// edit such that:
+  ///   1. We account for `\n` after a key within other keys or at the start
+  ///       Example..
+  ///             a:
+  ///             b: value
+  ///
+  ///       or..
+  ///             a: value
+  ///             b:
+  ///             c: value
+  ///
+  ///   2. We don't suggest edits that are not within the string bounds because
+  ///      of the `\n` we need to account for in Rule 1 above. This could be a
+  ///      key:
+  ///         * At the index `0` but it's the only key
+  ///         * At the end in a map with more than one key
+  end = start == yaml.length
+      ? start
+      : end < start
+          ? start + 1
+          : end;
+
+  // Skip comments lazily
+  end = skipAndExtractCommentsInBlock(
+    yaml,
+    endOfNodeOffset: end,
+    lineEnding: lineEnding,
+  ).endOffset;
+
+  valueAsString = normalizeEncodedBlock(
+    yaml,
+    lineEnding: lineEnding,
+    nodeToReplaceEndOffset: end,
+    update: newValue,
+    updateAsString: valueAsString,
+  );
 
   return SourceEdit(start, end - start, valueAsString);
 }
@@ -174,62 +216,73 @@ SourceEdit _replaceInFlowMap(
 SourceEdit _removeFromBlockMap(
     YamlEditor yamlEdit, YamlMap map, YamlNode keyNode, YamlNode valueNode) {
   final keySpan = keyNode.span;
-  var end = getContentSensitiveEnd(valueNode);
+
   final yaml = yamlEdit.toString();
+  final yamlSize = yaml.length;
+
   final lineEnding = getLineEnding(yaml);
 
-  if (map.length == 1) {
-    final start = map.span.start.offset;
-    final nextNewLine = yaml.indexOf(lineEnding, end);
-    if (nextNewLine != -1) {
-      // Remove everything up to the next newline, this strips comments that
-      // follows on the same line as the value we're removing.
-      // It also ensures we consume colon when [valueNode.value] is `null`
-      // because there is no value (e.g. `key: \n`). Because [valueNode.span] in
-      // such cases point to the colon `:`.
-      end = nextNewLine;
-    } else {
-      // Remove everything until the end of the document, if there is no newline
-      end = yaml.length;
-    }
-    return SourceEdit(start, end - start, '{}');
-  }
+  final (keyIndex, _) = getKeyNode(map, keyNode);
 
-  var start = keySpan.start.offset;
+  var startOffset = keySpan.start.offset;
 
-  /// Adjust the end to clear the new line after the end too.
+  /// Null values have an invalid offset. Include colon.
   ///
-  /// We do this because we suspect that our users will want the inline
-  /// comments to disappear too.
-  final nextNewLine = yaml.indexOf(lineEnding, end);
-  if (nextNewLine != -1) {
-    end = nextNewLine + lineEnding.length;
-  } else {
-    // Remove everything until the end of the document, if there is no newline
-    end = yaml.length;
+  /// See issue open in `package: yaml`.
+  var endOffset = valueNode.span.length == 0
+      ? keySpan.end.offset + 2
+      : getContentSensitiveEnd(valueNode) + 1; // Overeager to avoid issues
+
+  if (endOffset > yamlSize) endOffset -= 1;
+
+  endOffset = skipAndExtractCommentsInBlock(
+    yaml,
+    endOfNodeOffset: endOffset,
+    lineEnding: lineEnding,
+    greedy: true,
+  ).endOffset;
+
+  final mapSize = map.length;
+
+  final isSingleEntry = mapSize == 1;
+  final isLastEntryInMap = keyIndex == mapSize - 1;
+  final isLastNodeInYaml = endOffset == yamlSize;
+
+  final replacement = isSingleEntry ? '{}' : '';
+
+  /// Adjust [startIndent] to include any indent this element may have had
+  /// to prevent it from interfering with the indent of the next [YamlNode]
+  /// which isn't in this map. We move it back if:
+  ///   1. The entry is the last entry in a [map] with more than one element.
+  ///   2. It also isn't the first entry of map in the yaml.
+  ///
+  /// Doing this only for the last element ensures that any value's indent is
+  /// automatically given to the next entry in the map.
+  if (isLastEntryInMap && startOffset != 0 && !isSingleEntry) {
+    final index = yaml.lastIndexOf('\n', startOffset);
+    startOffset = index == -1 ? startOffset : index + 1;
   }
 
-  final nextNode = getNextKeyNode(map, keyNode);
-
-  if (start > 0) {
-    final lastHyphen = yaml.lastIndexOf('-', start - 1);
-    final lastNewLine = yaml.lastIndexOf(lineEnding, start - 1);
-    if (lastHyphen > lastNewLine) {
-      start = lastHyphen + 2;
-
-      /// If there is a `-` before the node, and the end is on the same line
-      /// as the next node, we need to add the necessary offset to the end to
-      /// make sure the next node has the correct indentation.
-      if (nextNode != null &&
-          nextNode.span.start.offset - end <= nextNode.span.start.column) {
-        end += nextNode.span.start.column;
-      }
-    } else if (lastNewLine > lastHyphen) {
-      start = lastNewLine + lineEnding.length;
-    }
+  /// We intentionally [skipAndExtractCommentsInBlock] greedily which also
+  /// consumes the next [YamlNode]'s indent.
+  ///
+  /// For elements at the last index, we need to reclaim the indent belonging
+  /// to the next node not in the map and optionally include a line break if
+  /// if it is the only entry. See [reclaimIndentAndLinebreak] for more info.
+  if (isLastEntryInMap && !isLastNodeInYaml) {
+    endOffset = reclaimIndentAndLinebreak(
+      yaml,
+      endOffset,
+      isSingle: isSingleEntry,
+    );
+  } else if (isLastNodeInYaml && yaml[endOffset - 1] == '\n' && isSingleEntry) {
+    /// Include any trailing line break that may have been part of the yaml:
+    ///   -`\r\n` = 2
+    ///   - `\n` = 1
+    endOffset -= lineEnding == '\n' ? 1 : 2;
   }
 
-  return SourceEdit(start, end - start, '');
+  return SourceEdit(startOffset, endOffset - startOffset, replacement);
 }
 
 /// Performs the string operation on [yamlEdit] to achieve the effect of
